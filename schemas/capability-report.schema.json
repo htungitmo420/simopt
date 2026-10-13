@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/simopt/capability-report.schema.json",
+  "title": "simopt capability report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "operating_system",
+    "architecture",
+    "platform_kind",
+    "cpu_model",
+    "logical_cpu_count",
+    "memory_total_bytes",
+    "cpu_features",
+    "probes",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "operating_system": { "type": "string" },
+    "architecture": { "type": "string" },
+    "platform_kind": {
+      "enum": ["linux_native", "wsl", "container", "windows_native", "mac_os", "other"]
+    },
+    "cpu_model": { "type": ["string", "null"] },
+    "logical_cpu_count": { "type": ["integer", "null"], "minimum": 1 },
+    "memory_total_bytes": { "type": ["integer", "null"], "minimum": 1 },
+    "cpu_features": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "probes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "state", "command", "detail"],
+        "properties": {
+          "name": { "type": "string" },
+          "state": { "enum": ["available", "unavailable", "skipped", "failed", "timed_out"] },
+          "command": { "type": "string" },
+          "detail": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

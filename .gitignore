@@ -1,0 +1,7 @@
+/target/
+/.cargo-home/
+/reports/**
+!/reports/.gitkeep
+/.idea/
+/.vscode/
+*.swp

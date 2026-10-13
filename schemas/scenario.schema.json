@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/simopt/scenario.schema.json",
+  "title": "simopt benchmark scenario",
+  "type": "object",
+  "required": ["schema_version", "label", "launch", "stats_topic"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "label": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+    "launch": {
+      "type": "object",
+      "required": ["program"],
+      "properties": {
+        "program": { "type": "string", "minLength": 1 },
+        "args": { "type": "array", "items": { "type": "string" } },
+        "environment": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "stats_topic": { "type": "string", "minLength": 1 },
+    "required_topics": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "message_check_topics": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "working_directory": { "type": ["string", "null"] },
+    "gz_command": { "type": "string", "minLength": 1 },
+    "warmup_seconds": { "type": "number", "minimum": 0 },
+    "duration_seconds": { "type": "number", "exclusiveMinimum": 0 },
+    "repeats": { "type": "integer", "minimum": 1 },
+    "startup_timeout_seconds": { "type": "number", "exclusiveMinimum": 0 },
+    "message_timeout_seconds": { "type": "number", "exclusiveMinimum": 0 },
+    "shutdown_grace_seconds": { "type": "number", "exclusiveMinimum": 0 },
+    "inter_run_delay_seconds": { "type": "number", "minimum": 0 },
+    "window_seconds": { "type": "number", "exclusiveMinimum": 0 },
+    "collect_process_metrics": { "type": "boolean" },
+    "resource_sample_interval_ms": { "type": "integer", "minimum": 1 },
+    "collect_capabilities": { "type": "boolean" },
+    "fingerprint_files": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false
+}

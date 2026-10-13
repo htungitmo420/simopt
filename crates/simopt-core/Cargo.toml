@@ -1,0 +1,12 @@
+[package]
+name = "simopt-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Portable RTF analysis and benchmark report types for Gazebo simulations"
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+

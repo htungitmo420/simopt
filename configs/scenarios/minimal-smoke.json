@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "label": "minimal-smoke",
+  "launch": {
+    "program": "gz",
+    "args": ["sim", "-s", "-r", "examples/minimal-world.sdf"],
+    "environment": {}
+  },
+  "stats_topic": "/world/simopt_smoke/stats",
+  "required_topics": [],
+  "message_check_topics": [],
+  "working_directory": "../..",
+  "gz_command": "gz",
+  "warmup_seconds": 1.0,
+  "duration_seconds": 3.0,
+  "repeats": 2,
+  "startup_timeout_seconds": 15.0,
+  "message_timeout_seconds": 10.0,
+  "shutdown_grace_seconds": 3.0,
+  "inter_run_delay_seconds": 0.5,
+  "window_seconds": 1.0,
+  "collect_process_metrics": true,
+  "resource_sample_interval_ms": 250,
+  "collect_capabilities": true,
+  "fingerprint_files": ["examples/minimal-world.sdf"]
+}
