@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/simopt/suite-comparison-report.schema.json",
+  "title": "simopt repeated-suite comparison",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "baseline_label",
+    "candidate_label",
+    "baseline_run_count",
+    "candidate_run_count",
+    "baseline_median_rtf",
+    "candidate_median_rtf",
+    "absolute_median_rtf_change",
+    "relative_median_rtf_change_percent",
+    "minimum_gain_percent",
+    "workload_fingerprint_match",
+    "renderer_match",
+    "measurement_policy_match",
+    "comparable",
+    "performance_gate_passed",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "baseline_label": { "type": "string" },
+    "candidate_label": { "type": "string" },
+    "baseline_run_count": { "type": "integer", "minimum": 1 },
+    "candidate_run_count": { "type": "integer", "minimum": 1 },
+    "baseline_median_rtf": { "type": "number", "minimum": 0 },
+    "candidate_median_rtf": { "type": "number", "minimum": 0 },
+    "absolute_median_rtf_change": { "type": "number" },
+    "relative_median_rtf_change_percent": { "type": ["number", "null"] },
+    "minimum_gain_percent": { "type": "number", "minimum": 0 },
+    "workload_fingerprint_match": { "type": ["boolean", "null"] },
+    "renderer_match": { "type": ["boolean", "null"] },
+    "measurement_policy_match": { "type": "boolean" },
+    "comparable": { "type": "boolean" },
+    "performance_gate_passed": { "type": "boolean" },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

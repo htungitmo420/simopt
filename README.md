@@ -78,12 +78,13 @@ warms up, captures each repetition, terminates the process group it created,
 and writes the scenario snapshot, launch logs, raw CSV, per-run JSON, and
 `suite.json`. Message checks happen before warm-up, so their CLI decoding work
 is outside the measured interval. The suite fingerprints the scenario,
-capability snapshot, and declared workload files with SHA-256. Each run records
-the renderer identity written by Gazebo after launch, so an old Ogre2 log or a
-WSL renderer change is not silently attributed to the current measurement. On
-Linux it also samples CPU time, average CPU-core use, and peak RSS for the
-complete launch process group during each capture. Set `collect_process_metrics`
-to `false` to measure without this sampler, or adjust
+capability snapshot, and declared workload files with SHA-256, and records the
+`simopt` version plus Git commit and dirty state when a repository is available.
+Each run records the renderer identity written by Gazebo after launch, so an old
+Ogre2 log or a WSL renderer change is not silently attributed to the current
+measurement. On Linux it also samples CPU time, average CPU-core use, and peak
+RSS for the complete launch process group during each capture. Set
+`collect_process_metrics` to `false` to measure without this sampler, or adjust
 `resource_sample_interval_ms`. The included scenario uses two short repetitions
 for smoke testing; use at least three longer repetitions for performance
 decisions.
@@ -100,6 +101,39 @@ cargo run --release -p simopt-cli -- bench \
 This reference world checks repeatability and renderer reporting across hosts.
 It is not a substitute for the real drone world or its obstacle-avoidance
 quality and latency gates.
+
+If the light world remains at RTF 1.0, inspect the suite before drawing a
+performance conclusion:
+
+```bash
+cargo run --release -p simopt-cli -- inspect-suite \
+  --input reports/camera-lidar/suite.json \
+  --output reports/camera-lidar/diagnostic.json
+```
+
+The repository also includes a 1280x720 60 Hz camera and 2048x64 20 Hz GPU
+LiDAR stress profile. Run the headless and GUI profiles on the same machine:
+
+```bash
+cargo run --release -p simopt-cli -- bench \
+  --scenario configs/scenarios/camera-lidar-stress-headless.json \
+  --output-dir reports/stress-headless
+
+cargo run --release -p simopt-cli -- bench \
+  --scenario configs/scenarios/camera-lidar-stress-gui.json \
+  --output-dir reports/stress-gui
+
+cargo run --release -p simopt-cli -- compare-suites \
+  --baseline reports/stress-gui/suite.json \
+  --candidate reports/stress-headless/suite.json \
+  --minimum-gain-percent 5 \
+  --output reports/stress-gui-vs-headless.json
+```
+
+`compare-suites` uses median RTF across repetitions and invalidates its
+performance gate when workload fingerprints or renderer identities differ. It
+also warns when both suites are pinned near RTF 1.0 and therefore cannot expose
+headroom.
 
 On a Jazzy installation, run the included end-to-end smoke test from WSL2 or
 Ubuntu after building the release binary:
@@ -150,6 +184,7 @@ cargo run -p simopt-cli -- compare \
 The performance gate only evaluates RTF. A Gazebo configuration must also pass
 the workload's sensor, latency, and safety/mission quality gates before adoption.
 Versioned JSON contracts live in [`schemas/`](schemas/).
+Platform-specific evidence is tracked in [COMPATIBILITY.md](COMPATIBILITY.md).
 
 ## Current limitations
 

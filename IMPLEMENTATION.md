@@ -21,7 +21,8 @@ Updated: 2026-10-13
 - Optional Linux process-group monitoring records CPU time, average CPU-core
   use, and peak RSS during each measured interval.
 - Each repeated suite includes SHA-256 fingerprints for its scenario,
-  capability snapshot, and declared workload files.
+  capability snapshot, and declared workload files, plus tool version and Git
+  source revision when available.
 - Each run records a fresh Gazebo Ogre2 renderer identity and warns on software
   rendering; suite aggregation warns when renderer selection changes between
   repetitions.
@@ -29,11 +30,16 @@ Updated: 2026-10-13
   and MIT license.
 - Reusable minimal and camera/GPU-LiDAR headless Gazebo worlds plus a WSL2
   smoke-test script that can require actual sensor messages.
+- Suite diagnosis classifies real-time-capped, below-real-time, faster-than-real-time,
+  unstable, and inconclusive workloads. Repeated-suite comparison checks workload
+  fingerprints and renderer identity before evaluating its performance gate.
+- A heavier camera/GPU-LiDAR reference world and paired GUI/headless scenarios
+  provide a portable B0/B1-style experiment before the real drone is available.
 
 ## Verified in this workspace
 
 - Rust 1.85.0 on Ubuntu 24.04 WSL2.
-- `cargo fmt --all --check`, Clippy with warnings denied, and all 26 unit tests
+- `cargo fmt --all --check`, Clippy with warnings denied, and all 28 unit tests
   pass, including pause/reset segmentation and Gazebo JSON parsing.
 - Release CLI executed `doctor`, `analyze`, and `compare` successfully using
   sample data.
@@ -88,12 +94,23 @@ mismatch alone does not explain the reported RTF 0.30 in the full drone stack.
 This is a different machine from the stated i7-4790 / GTX 1080 Ti auxiliary
 system.
 
+An imported three-run suite from the auxiliary i7-4790 / GTX 1080 Ti system
+confirmed ROS 2 Jazzy, Gazebo Sim 8.15.0, `perf`, 15.5 GiB RAM, NVIDIA driver
+582.53, and Ogre2 D3D12 hardware rendering. Its 180-second runs produced median
+RTF 0.999979 with only 0.027% run-to-run spread, 0.420 median average CPU cores,
+and a 316,166,144-byte peak RSS. The suite diagnostic correctly classifies this
+reference workload as real-time capped, so it is compatibility and stability
+evidence rather than evidence about the reported RTF 0.30 drone workload.
+
 ## Next implementation slice
 
-1. Measure B0/B1 (GUI versus server/headless) on the actual drone world.
-2. Add native Gazebo Transport collection after the CLI contract stabilizes.
+1. Run the new stress GUI/headless pair on the auxiliary machine, then repeat
+   B0/B1 on the actual drone world.
+2. Record the real drone launch, sensor specifications, physics step, bridge,
+   perception, controller, and SITL configuration for B2-B7.
 3. Add quality-adapter hooks for obstacle-avoidance latency and accuracy gates.
-4. Only after profiling, select a compute kernel for a C++/Rust FFI spike.
+4. Add native Gazebo Transport collection after the CLI contract stabilizes.
+5. Only after profiling, select a compute kernel for a C++/Rust FFI spike.
 
 ## Verification
 

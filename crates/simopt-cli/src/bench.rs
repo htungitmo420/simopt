@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use simopt_core::{
     aggregate_reports, analyze_samples, ArtifactFingerprint, BenchmarkFingerprint,
-    BenchmarkSuiteReport,
+    BenchmarkSuiteReport, SourceRevision,
 };
 use std::{
     collections::BTreeMap,
@@ -119,6 +119,8 @@ pub fn run(scenario_path: &Path, output_override: Option<&Path>) -> Result<PathB
         scenario: fingerprint_file(scenario_path, scenario_path)?,
         workload_files,
         capability_report,
+        tool_version: Some(env!("CARGO_PKG_VERSION").into()),
+        source_revision: source_revision(scenario_path),
     };
 
     let mut reports = Vec::with_capacity(manifest.repeats);
@@ -323,6 +325,43 @@ fn fingerprint_file(path: &Path, recorded_path: &Path) -> Result<ArtifactFingerp
         path: recorded_path.display().to_string(),
         size_bytes: metadata.len(),
         digest: format!("{:x}", hasher.finalize()),
+    })
+}
+
+fn source_revision(path: &Path) -> Option<SourceRevision> {
+    let canonical = fs::canonicalize(path).ok()?;
+    let repository = canonical
+        .ancestors()
+        .find(|ancestor| ancestor.join(".git").exists())?;
+    let commit_output = Command::new("git")
+        .args(["-C", repository.to_str()?, "rev-parse", "HEAD"])
+        .stdin(Stdio::null())
+        .output()
+        .ok()?;
+    if !commit_output.status.success() {
+        return None;
+    }
+    let commit = String::from_utf8(commit_output.stdout)
+        .ok()?
+        .trim()
+        .to_string();
+    if commit.is_empty() {
+        return None;
+    }
+    let status_output = Command::new("git")
+        .args([
+            "-C",
+            repository.to_str()?,
+            "status",
+            "--porcelain",
+            "--untracked-files=no",
+        ])
+        .stdin(Stdio::null())
+        .output()
+        .ok()?;
+    Some(SourceRevision {
+        commit,
+        dirty: !status_output.stdout.is_empty() || !status_output.status.success(),
     })
 }
 

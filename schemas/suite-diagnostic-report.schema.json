@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/simopt/suite-diagnostic-report.schema.json",
+  "title": "simopt benchmark suite diagnostic",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "label",
+    "run_count",
+    "workload_state",
+    "median_total_rtf",
+    "p05_total_rtf",
+    "relative_run_spread_percent",
+    "median_average_cpu_cores",
+    "maximum_peak_rss_bytes",
+    "renderers",
+    "software_renderer_runs",
+    "findings",
+    "recommended_next_steps",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "label": { "type": "string", "minLength": 1 },
+    "run_count": { "type": "integer", "minimum": 1 },
+    "workload_state": {
+      "enum": [
+        "realtime_capped",
+        "below_realtime",
+        "faster_than_realtime",
+        "unstable",
+        "inconclusive"
+      ]
+    },
+    "median_total_rtf": { "type": "number", "minimum": 0 },
+    "p05_total_rtf": { "type": "number", "minimum": 0 },
+    "relative_run_spread_percent": { "type": ["number", "null"], "minimum": 0 },
+    "median_average_cpu_cores": { "type": ["number", "null"], "minimum": 0 },
+    "maximum_peak_rss_bytes": { "type": ["integer", "null"], "minimum": 0 },
+    "renderers": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "software_renderer_runs": { "type": "integer", "minimum": 0 },
+    "findings": { "type": "array", "items": { "type": "string" } },
+    "recommended_next_steps": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

@@ -235,7 +235,7 @@ schemas/                   # versioned JSON contracts
 .github/workflows/         # CI checks
 ```
 
-- [ ] Capture the target i7-4790 / GTX 1080 Ti machine's Ubuntu, RAM, driver, renderer, and package versions.
+- [x] Capture the target i7-4790 / GTX 1080 Ti machine's Ubuntu, RAM, driver, renderer, and package versions.
 - [ ] Record the real drone launch command, camera/LiDAR types, resolution, samples, update rates, physics step, and flight controller or SITL.
 - [ ] Define obstacle-avoidance accuracy and latency limits.
 - [ ] Run B0 and B1 on the target machine and verify its actual Ogre2 renderer.
@@ -249,9 +249,9 @@ schemas/                   # versioned JSON contracts
 - [ ] Optimize Gazebo/ROS/C++ with evidence and retain rollback data.
 - [ ] Select one Rust kernel only when profiling establishes value.
 - [ ] Validate drone behavior, resource stability, and integration on WSL2.
-- [ ] Run the tooling on another world and at least one additional computer.
+- [x] Run the tooling on another world and at least one additional computer.
 - [ ] Add a native Gazebo Transport metrics adapter after the CLI contract stabilizes.
-- [ ] Publish a compatibility matrix that distinguishes build, runtime, and performance evidence.
+- [x] Publish a compatibility matrix that distinguishes build, runtime, and performance evidence.
 
 ## 10. Risks and mitigations
 

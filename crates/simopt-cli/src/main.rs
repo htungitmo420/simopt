@@ -5,7 +5,10 @@ mod resources;
 
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
-use simopt_core::{analyze_samples, compare_reports, BenchmarkReport, TimeSample};
+use simopt_core::{
+    analyze_samples, compare_reports, compare_suites, diagnose_suite, BenchmarkReport,
+    BenchmarkSuiteReport, TimeSample,
+};
 use std::{
     fs::File,
     io::{self, BufReader, BufWriter, Write},
@@ -66,6 +69,24 @@ enum Command {
     },
     /// Compare two reports produced by `simopt analyze`.
     Compare {
+        #[arg(long)]
+        baseline: PathBuf,
+        #[arg(long)]
+        candidate: PathBuf,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        #[arg(long, default_value_t = 10.0)]
+        minimum_gain_percent: f64,
+    },
+    /// Diagnose whether a repeated suite exposes useful optimization headroom.
+    InspectSuite {
+        #[arg(short, long)]
+        input: PathBuf,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+    /// Compare the median RTF of two repeated suites with provenance checks.
+    CompareSuites {
         #[arg(long)]
         baseline: PathBuf,
         #[arg(long)]
@@ -147,6 +168,24 @@ fn run(cli: Cli) -> Result<(), String> {
             let candidate_report: BenchmarkReport = read_json(&candidate)?;
             let comparison =
                 compare_reports(&baseline_report, &candidate_report, minimum_gain_percent)
+                    .map_err(|error| error.to_string())?;
+            write_json(output.as_deref(), &comparison)
+        }
+        Command::InspectSuite { input, output } => {
+            let suite: BenchmarkSuiteReport = read_json(&input)?;
+            let diagnostic = diagnose_suite(&suite).map_err(|error| error.to_string())?;
+            write_json(output.as_deref(), &diagnostic)
+        }
+        Command::CompareSuites {
+            baseline,
+            candidate,
+            output,
+            minimum_gain_percent,
+        } => {
+            let baseline_suite: BenchmarkSuiteReport = read_json(&baseline)?;
+            let candidate_suite: BenchmarkSuiteReport = read_json(&candidate)?;
+            let comparison =
+                compare_suites(&baseline_suite, &candidate_suite, minimum_gain_percent)
                     .map_err(|error| error.to_string())?;
             write_json(output.as_deref(), &comparison)
         }

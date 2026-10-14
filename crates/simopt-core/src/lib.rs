@@ -87,6 +87,54 @@ pub struct ComparisonReport {
     pub warnings: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkloadState {
+    RealtimeCapped,
+    BelowRealtime,
+    FasterThanRealtime,
+    Unstable,
+    Inconclusive,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SuiteDiagnosticReport {
+    pub schema_version: u32,
+    pub label: String,
+    pub run_count: usize,
+    pub workload_state: WorkloadState,
+    pub median_total_rtf: f64,
+    pub p05_total_rtf: f64,
+    pub relative_run_spread_percent: Option<f64>,
+    pub median_average_cpu_cores: Option<f64>,
+    pub maximum_peak_rss_bytes: Option<u64>,
+    pub renderers: Vec<String>,
+    pub software_renderer_runs: usize,
+    pub findings: Vec<String>,
+    pub recommended_next_steps: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SuiteComparisonReport {
+    pub schema_version: u32,
+    pub baseline_label: String,
+    pub candidate_label: String,
+    pub baseline_run_count: usize,
+    pub candidate_run_count: usize,
+    pub baseline_median_rtf: f64,
+    pub candidate_median_rtf: f64,
+    pub absolute_median_rtf_change: f64,
+    pub relative_median_rtf_change_percent: Option<f64>,
+    pub minimum_gain_percent: f64,
+    pub workload_fingerprint_match: Option<bool>,
+    pub renderer_match: Option<bool>,
+    pub measurement_policy_match: bool,
+    pub comparable: bool,
+    pub performance_gate_passed: bool,
+    pub warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BenchmarkSuiteReport {
     pub schema_version: u32,
@@ -108,6 +156,16 @@ pub struct BenchmarkFingerprint {
     pub scenario: ArtifactFingerprint,
     pub workload_files: Vec<ArtifactFingerprint>,
     pub capability_report: Option<ArtifactFingerprint>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_revision: Option<SourceRevision>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SourceRevision {
+    pub commit: String,
+    pub dirty: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -135,6 +193,10 @@ pub enum AnalysisError {
     NoBenchmarkReports,
     #[error("report {index} uses unsupported schema version {version}")]
     UnsupportedReportSchema { index: usize, version: u32 },
+    #[error("suite uses unsupported schema version {version}")]
+    UnsupportedSuiteSchema { version: u32 },
+    #[error("suite declares {declared} run(s) but contains {actual}")]
+    InvalidSuiteRunCount { declared: usize, actual: usize },
 }
 
 /// Analyze monotonic wall/simulation timestamps.
@@ -301,6 +363,313 @@ pub fn compare_reports(
         performance_gate_passed: relative.is_some_and(|value| value >= minimum_gain_percent),
         warnings,
     })
+}
+
+/// Summarize what a repeated benchmark can and cannot establish.
+pub fn diagnose_suite(
+    suite: &BenchmarkSuiteReport,
+) -> Result<SuiteDiagnosticReport, AnalysisError> {
+    validate_suite(suite)?;
+
+    let median_rtf = suite.total_rtf.median;
+    let spread = (median_rtf > 0.0)
+        .then(|| (suite.total_rtf.max - suite.total_rtf.min).abs() / median_rtf * 100.0);
+    let unstable =
+        spread.is_some_and(|value| value > 5.0) || suite.window_p05_rtf.median < median_rtf * 0.90;
+    let workload_state = if unstable {
+        WorkloadState::Unstable
+    } else if (0.97..=1.03).contains(&median_rtf) && suite.total_rtf.p05 >= 0.95 {
+        WorkloadState::RealtimeCapped
+    } else if median_rtf < 0.95 {
+        WorkloadState::BelowRealtime
+    } else if median_rtf > 1.03 {
+        WorkloadState::FasterThanRealtime
+    } else {
+        WorkloadState::Inconclusive
+    };
+
+    let mut cpu_cores = suite
+        .runs
+        .iter()
+        .filter_map(|run| run.process_metrics.as_ref()?.average_cpu_cores)
+        .collect::<Vec<_>>();
+    let median_average_cpu_cores = median_value(&mut cpu_cores);
+    let maximum_peak_rss_bytes = suite
+        .runs
+        .iter()
+        .filter_map(|run| run.process_metrics.as_ref()?.peak_rss_bytes)
+        .max();
+    let renderers = suite_renderer_names(suite);
+    let software_renderer_runs = suite
+        .runs
+        .iter()
+        .filter_map(|run| run.renderer.as_ref())
+        .filter(|renderer| renderer.software)
+        .count();
+
+    let mut findings = Vec::new();
+    let mut recommended_next_steps = Vec::new();
+    match workload_state {
+        WorkloadState::RealtimeCapped => {
+            findings.push(
+                "RTF is tightly clustered around 1.0; this workload reaches the configured real-time target and does not expose available performance headroom"
+                    .into(),
+            );
+            recommended_next_steps.push(
+                "run the real drone workload or a heavier reference profile before selecting an optimization"
+                    .into(),
+            );
+            recommended_next_steps.push(
+                "use an uncapped profile only as a separate throughput experiment; keep the capped profile for real-time behavior validation"
+                    .into(),
+            );
+        }
+        WorkloadState::BelowRealtime => {
+            findings
+                .push("median RTF is below 0.95, so the workload cannot sustain real time".into());
+            recommended_next_steps.push(
+                "run the B2-B7 isolation matrix to separate physics, sensing, bridge, perception, controller, and SITL cost"
+                    .into(),
+            );
+        }
+        WorkloadState::FasterThanRealtime => {
+            findings.push(
+                "median RTF is above 1.03; the scenario appears to run without a real-time cap"
+                    .into(),
+            );
+            recommended_next_steps.push(
+                "treat this as throughput evidence and use a real-time-capped run for latency and behavior validation"
+                    .into(),
+            );
+        }
+        WorkloadState::Unstable => {
+            findings.push(
+                "run-to-run or lower-tail RTF variation exceeds the stability threshold".into(),
+            );
+            recommended_next_steps.push(
+                "inspect per-run logs and background load, lengthen warm-up, and repeat before comparing candidates"
+                    .into(),
+            );
+        }
+        WorkloadState::Inconclusive => {
+            findings.push(
+                "RTF is near the real-time boundary but does not meet a stable classification"
+                    .into(),
+            );
+            recommended_next_steps
+                .push("repeat with longer runs and inspect the one-second RTF tail".into());
+        }
+    }
+    if let Some(value) = median_average_cpu_cores {
+        findings.push(format!(
+            "the measured process group used a median average of {value:.3} CPU cores"
+        ));
+    }
+    if software_renderer_runs > 0 {
+        findings.push(format!(
+            "{software_renderer_runs} run(s) used a software renderer"
+        ));
+        recommended_next_steps.push(
+            "establish hardware rendering before attributing camera or GPU LiDAR cost".into(),
+        );
+    } else if !renderers.is_empty() {
+        findings.push(format!("Gazebo renderer: {}", renderers.join(", ")));
+    }
+    if suite.run_count < 3 {
+        recommended_next_steps
+            .push("collect at least three repetitions before making a performance decision".into());
+    }
+
+    Ok(SuiteDiagnosticReport {
+        schema_version: REPORT_SCHEMA_VERSION,
+        label: suite.label.clone(),
+        run_count: suite.run_count,
+        workload_state,
+        median_total_rtf: median_rtf,
+        p05_total_rtf: suite.total_rtf.p05,
+        relative_run_spread_percent: spread,
+        median_average_cpu_cores,
+        maximum_peak_rss_bytes,
+        renderers,
+        software_renderer_runs,
+        findings,
+        recommended_next_steps,
+        warnings: suite.warnings.clone(),
+    })
+}
+
+/// Compare the median of repeated benchmark suites while checking provenance.
+pub fn compare_suites(
+    baseline: &BenchmarkSuiteReport,
+    candidate: &BenchmarkSuiteReport,
+    minimum_gain_percent: f64,
+) -> Result<SuiteComparisonReport, AnalysisError> {
+    validate_suite(baseline)?;
+    validate_suite(candidate)?;
+    if !minimum_gain_percent.is_finite() || minimum_gain_percent < 0.0 {
+        return Err(AnalysisError::InvalidMinimumGain);
+    }
+
+    let baseline_rtf = baseline.total_rtf.median;
+    let candidate_rtf = candidate.total_rtf.median;
+    let absolute = candidate_rtf - baseline_rtf;
+    let relative = (baseline_rtf > 0.0).then(|| absolute / baseline_rtf * 100.0);
+    let workload_fingerprint_match = match (&baseline.fingerprint, &candidate.fingerprint) {
+        (Some(left), Some(right)) => Some(workload_digests(left) == workload_digests(right)),
+        _ => None,
+    };
+    let baseline_renderers = suite_renderer_names(baseline);
+    let candidate_renderers = suite_renderer_names(candidate);
+    let renderer_match = if baseline_renderers.is_empty() || candidate_renderers.is_empty() {
+        None
+    } else {
+        Some(baseline_renderers == candidate_renderers)
+    };
+    let baseline_window = baseline.runs.first().map(|run| run.window_seconds);
+    let candidate_window = candidate.runs.first().map(|run| run.window_seconds);
+    let mut baseline_durations = baseline
+        .runs
+        .iter()
+        .map(|run| run.total_wall_time_s)
+        .collect::<Vec<_>>();
+    let mut candidate_durations = candidate
+        .runs
+        .iter()
+        .map(|run| run.total_wall_time_s)
+        .collect::<Vec<_>>();
+    let baseline_duration = median_value(&mut baseline_durations).unwrap_or_default();
+    let candidate_duration = median_value(&mut candidate_durations).unwrap_or_default();
+    let duration_match = baseline_duration > 0.0
+        && ((candidate_duration - baseline_duration).abs() / baseline_duration) <= 0.05;
+    let measurement_policy_match = baseline_window == candidate_window && duration_match;
+
+    let mut comparable = true;
+    let mut warnings = Vec::new();
+    match workload_fingerprint_match {
+        Some(true) => {}
+        Some(false) => {
+            comparable = false;
+            warnings.push("workload file fingerprints differ; performance gate is invalid".into());
+        }
+        None => {
+            comparable = false;
+            warnings
+                .push("workload fingerprints are unavailable; performance gate is invalid".into());
+        }
+    }
+    match renderer_match {
+        Some(true) => {}
+        Some(false) => {
+            comparable = false;
+            warnings.push("Gazebo renderer identities differ; performance gate is invalid".into());
+        }
+        None => {
+            comparable = false;
+            warnings.push("renderer identity is unavailable; performance gate is invalid".into());
+        }
+    }
+    if !measurement_policy_match {
+        comparable = false;
+        warnings.push(
+            "RTF window duration or measured wall duration differs by more than 5%; performance gate is invalid"
+                .into(),
+        );
+    }
+    if baseline.run_count < 3 || candidate.run_count < 3 {
+        warnings.push("both suites should contain at least three repetitions".into());
+    }
+    if baseline.run_count != candidate.run_count {
+        warnings.push("suites contain different repetition counts".into());
+    }
+    if (0.97..=1.03).contains(&baseline_rtf) && (0.97..=1.03).contains(&candidate_rtf) {
+        warnings.push(
+            "both suites are near the real-time cap; this comparison may not expose performance headroom"
+                .into(),
+        );
+    }
+    warnings.extend(
+        baseline
+            .warnings
+            .iter()
+            .map(|warning| format!("baseline: {warning}")),
+    );
+    warnings.extend(
+        candidate
+            .warnings
+            .iter()
+            .map(|warning| format!("candidate: {warning}")),
+    );
+
+    Ok(SuiteComparisonReport {
+        schema_version: REPORT_SCHEMA_VERSION,
+        baseline_label: baseline.label.clone(),
+        candidate_label: candidate.label.clone(),
+        baseline_run_count: baseline.run_count,
+        candidate_run_count: candidate.run_count,
+        baseline_median_rtf: baseline_rtf,
+        candidate_median_rtf: candidate_rtf,
+        absolute_median_rtf_change: absolute,
+        relative_median_rtf_change_percent: relative,
+        minimum_gain_percent,
+        workload_fingerprint_match,
+        renderer_match,
+        measurement_policy_match,
+        comparable,
+        performance_gate_passed: comparable
+            && relative.is_some_and(|value| value >= minimum_gain_percent),
+        warnings,
+    })
+}
+
+fn validate_suite(suite: &BenchmarkSuiteReport) -> Result<(), AnalysisError> {
+    if suite.schema_version != REPORT_SCHEMA_VERSION {
+        return Err(AnalysisError::UnsupportedSuiteSchema {
+            version: suite.schema_version,
+        });
+    }
+    if suite.run_count != suite.runs.len() {
+        return Err(AnalysisError::InvalidSuiteRunCount {
+            declared: suite.run_count,
+            actual: suite.runs.len(),
+        });
+    }
+    Ok(())
+}
+
+fn suite_renderer_names(suite: &BenchmarkSuiteReport) -> Vec<String> {
+    let mut names = suite
+        .runs
+        .iter()
+        .filter_map(|run| run.renderer.as_ref())
+        .filter_map(|renderer| {
+            renderer
+                .gl_renderer
+                .as_ref()
+                .or(renderer.device_name.as_ref())
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    names.sort();
+    names.dedup();
+    names
+}
+
+fn workload_digests(fingerprint: &BenchmarkFingerprint) -> Vec<String> {
+    let mut digests = fingerprint
+        .workload_files
+        .iter()
+        .map(|artifact| artifact.digest.clone())
+        .collect::<Vec<_>>();
+    digests.sort();
+    digests
+}
+
+fn median_value(values: &mut [f64]) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    values.sort_by(f64::total_cmp);
+    Some(percentile(values, 0.5))
 }
 
 /// Aggregate repeated runs without hiding the individual reports.
@@ -573,5 +942,80 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.contains("different Gazebo renderers")));
+    }
+
+    #[test]
+    fn diagnoses_a_light_realtime_capped_suite() {
+        let mut runs = Vec::new();
+        for index in 0..3 {
+            let mut run = analyze_samples(
+                format!("run-{index}"),
+                "run.csv",
+                &[sample(0.0, 0.0), sample(10.0, 10.0)],
+                1.0,
+            )
+            .unwrap();
+            run.process_metrics = Some(ProcessMetrics {
+                source: "procfs".into(),
+                sample_count: 10,
+                wall_time_s: 10.0,
+                cpu_time_s: Some(4.0),
+                average_cpu_cores: Some(0.4),
+                peak_rss_bytes: Some(300_000_000),
+                warnings: Vec::new(),
+            });
+            run.renderer = Some(RendererIdentity {
+                source: "ogre2.log".into(),
+                egl_device: None,
+                gl_renderer: Some("D3D12 (NVIDIA)".into()),
+                device_name: None,
+                software: false,
+                log_modified_unix_ms: None,
+            });
+            runs.push(run);
+        }
+        let suite = aggregate_reports("light", "scenario.json", &runs).unwrap();
+        let diagnostic = diagnose_suite(&suite).unwrap();
+
+        assert_eq!(diagnostic.workload_state, WorkloadState::RealtimeCapped);
+        assert_eq!(diagnostic.median_average_cpu_cores, Some(0.4));
+        assert_eq!(diagnostic.maximum_peak_rss_bytes, Some(300_000_000));
+        assert!(diagnostic
+            .recommended_next_steps
+            .iter()
+            .any(|step| step.contains("heavier")));
+    }
+
+    #[test]
+    fn suite_comparison_requires_matching_workload_and_renderer() {
+        let report =
+            analyze_samples("run", "run.csv", &[sample(0.0, 0.0), sample(1.0, 0.5)], 1.0).unwrap();
+        let mut baseline =
+            aggregate_reports("baseline", "baseline.json", &[report.clone()]).unwrap();
+        let mut candidate = aggregate_reports("candidate", "candidate.json", &[report]).unwrap();
+        let fingerprint = |digest: &str| BenchmarkFingerprint {
+            algorithm: "sha256".into(),
+            scenario: ArtifactFingerprint {
+                path: "scenario.json".into(),
+                size_bytes: 1,
+                digest: "scenario".into(),
+            },
+            workload_files: vec![ArtifactFingerprint {
+                path: "world.sdf".into(),
+                size_bytes: 1,
+                digest: digest.into(),
+            }],
+            capability_report: None,
+            tool_version: Some("0.1.0".into()),
+            source_revision: None,
+        };
+        baseline.fingerprint = Some(fingerprint("world-a"));
+        candidate.fingerprint = Some(fingerprint("world-b"));
+
+        let comparison = compare_suites(&baseline, &candidate, 5.0).unwrap();
+        assert_eq!(comparison.workload_fingerprint_match, Some(false));
+        assert!(comparison.measurement_policy_match);
+        assert!(!comparison.comparable);
+        assert!(!comparison.performance_gate_passed);
     }
 }

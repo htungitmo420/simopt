@@ -1,0 +1,107 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="simopt_sensor_stress">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+
+    <gravity>0 0 -9.8</gravity>
+    <scene>
+      <ambient>0.35 0.35 0.35 1</ambient>
+      <background>0.08 0.08 0.1 1</background>
+      <shadows>false</shadows>
+    </scene>
+
+    <light type="directional" name="sun">
+      <pose>0 0 12 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>60 60 0.1</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>60 60 0.1</size></box></geometry>
+          <material><diffuse>0.45 0.45 0.45 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="sensor_rig">
+      <static>true</static>
+      <pose>0 0 2 0 0 0</pose>
+      <link name="link">
+        <visual name="body">
+          <geometry><box><size>0.3 0.3 0.15</size></box></geometry>
+          <material><diffuse>0.1 0.2 0.8 1</diffuse></material>
+        </visual>
+
+        <sensor name="front_camera" type="camera">
+          <topic>/simopt/stress/camera</topic>
+          <always_on>true</always_on>
+          <update_rate>60</update_rate>
+          <visualize>false</visualize>
+          <enable_metrics>true</enable_metrics>
+          <camera>
+            <horizontal_fov>1.047</horizontal_fov>
+            <image>
+              <width>1280</width>
+              <height>720</height>
+              <format>R8G8B8</format>
+            </image>
+            <clip><near>0.1</near><far>50</far></clip>
+          </camera>
+        </sensor>
+
+        <sensor name="front_lidar" type="gpu_lidar">
+          <topic>/simopt/stress/lidar</topic>
+          <always_on>true</always_on>
+          <update_rate>20</update_rate>
+          <visualize>false</visualize>
+          <enable_metrics>true</enable_metrics>
+          <ray>
+            <scan>
+              <horizontal>
+                <samples>2048</samples>
+                <resolution>1</resolution>
+                <min_angle>-3.14159</min_angle>
+                <max_angle>3.14159</max_angle>
+              </horizontal>
+              <vertical>
+                <samples>64</samples>
+                <resolution>1</resolution>
+                <min_angle>-0.4363</min_angle>
+                <max_angle>0.4363</max_angle>
+              </vertical>
+            </scan>
+            <range><min>0.2</min><max>50</max><resolution>0.01</resolution></range>
+          </ray>
+        </sensor>
+      </link>
+    </model>
+
+    <model name="obstacle_field">
+      <static>true</static>
+      <link name="link">
+        <visual name="box_1"><pose>5 -4 1 0 0 0</pose><geometry><box><size>1 1 2</size></box></geometry></visual>
+        <visual name="box_2"><pose>7 0 1.5 0 0 0</pose><geometry><box><size>1.5 1.5 3</size></box></geometry></visual>
+        <visual name="box_3"><pose>10 4 2 0 0 0</pose><geometry><box><size>2 2 4</size></box></geometry></visual>
+        <visual name="box_4"><pose>14 -3 2.5 0 0 0</pose><geometry><cylinder><radius>1.2</radius><length>5</length></cylinder></geometry></visual>
+        <visual name="box_5"><pose>18 3 3 0 0 0</pose><geometry><box><size>3 1 6</size></box></geometry></visual>
+      </link>
+    </model>
+  </world>
+</sdf>
