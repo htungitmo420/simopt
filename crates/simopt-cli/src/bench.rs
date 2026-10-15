@@ -33,6 +33,8 @@ pub struct ScenarioManifest {
     #[serde(default)]
     pub load_topics: Vec<String>,
     #[serde(default)]
+    pub load_subscriber: Option<LaunchCommand>,
+    #[serde(default)]
     pub working_directory: Option<PathBuf>,
     #[serde(default = "default_gz_command")]
     pub gz_command: PathBuf,
@@ -60,6 +62,8 @@ pub struct ScenarioManifest {
     pub collect_capabilities: bool,
     #[serde(default)]
     pub fingerprint_files: Vec<PathBuf>,
+    #[serde(default)]
+    pub configuration_files: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,10 +120,23 @@ pub fn run(scenario_path: &Path, output_override: Option<&Path>) -> Result<PathB
             fingerprint_file(&resolved, path)
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let configuration_files = manifest
+        .configuration_files
+        .iter()
+        .map(|path| {
+            let resolved = if path.is_absolute() {
+                path.clone()
+            } else {
+                working_directory.join(path)
+            };
+            fingerprint_file(&resolved, path)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let fingerprint = BenchmarkFingerprint {
         algorithm: "sha256".into(),
         scenario: fingerprint_file(scenario_path, scenario_path)?,
         workload_files,
+        configuration_files,
         capability_report,
         tool_version: Some(env!("CARGO_PKG_VERSION").into()),
         source_revision: source_revision(scenario_path),
@@ -151,8 +168,12 @@ pub fn run(scenario_path: &Path, output_override: Option<&Path>) -> Result<PathB
             Duration::from_secs_f64(manifest.startup_timeout_seconds),
             &mut process,
         )?;
-        let mut load_subscribers =
-            TopicSubscribers::start(&manifest.gz_command, &manifest.load_topics)?;
+        let mut load_subscribers = TopicSubscribers::start(
+            &manifest.gz_command,
+            manifest.load_subscriber.as_ref(),
+            &manifest.load_topics,
+            &working_directory,
+        )?;
         verify_topic_messages(
             &manifest.gz_command,
             &manifest.message_check_topics,
@@ -283,6 +304,11 @@ fn validate_manifest(manifest: &ScenarioManifest) -> Result<(), String> {
     {
         return Err("load_topics cannot contain an empty topic".into());
     }
+    if let Some(subscriber) = &manifest.load_subscriber {
+        if subscriber.program.as_os_str().is_empty() {
+            return Err("load_subscriber program cannot be empty".into());
+        }
+    }
     if manifest.repeats == 0 {
         return Err("repeats must be greater than zero".into());
     }
@@ -302,6 +328,13 @@ fn validate_manifest(manifest: &ScenarioManifest) -> Result<(), String> {
         .any(|path| path.as_os_str().is_empty())
     {
         return Err("fingerprint_files cannot contain an empty path".into());
+    }
+    if manifest
+        .configuration_files
+        .iter()
+        .any(|path| path.as_os_str().is_empty())
+    {
+        return Err("configuration_files cannot contain an empty path".into());
     }
     Ok(())
 }
@@ -522,14 +555,42 @@ struct TopicSubscribers {
 }
 
 impl TopicSubscribers {
-    fn start(gz_command: &Path, topics: &[String]) -> Result<Self, String> {
+    fn start(
+        gz_command: &Path,
+        custom_command: Option<&LaunchCommand>,
+        topics: &[String],
+        working_directory: &Path,
+    ) -> Result<Self, String> {
         let mut subscribers = Self {
             children: Vec::with_capacity(topics.len()),
         };
         for topic in topics {
-            let mut command = Command::new(gz_command);
+            let mut command = match custom_command {
+                Some(specification) => {
+                    let mut command = Command::new(&specification.program);
+                    let mut replaced_topic = false;
+                    for argument in &specification.args {
+                        if argument.contains("{topic}") {
+                            command.arg(argument.replace("{topic}", topic));
+                            replaced_topic = true;
+                        } else {
+                            command.arg(argument);
+                        }
+                    }
+                    if !replaced_topic {
+                        command.arg(topic);
+                    }
+                    command.envs(&specification.environment);
+                    command
+                }
+                None => {
+                    let mut command = Command::new(gz_command);
+                    command.args(["topic", "-e", "-t", topic]);
+                    command
+                }
+            };
             command
-                .args(["topic", "-e", "-t", topic])
+                .current_dir(working_directory)
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null());
@@ -771,6 +832,7 @@ mod tests {
             required_topics: Vec::new(),
             message_check_topics: Vec::new(),
             load_topics: Vec::new(),
+            load_subscriber: None,
             working_directory: Some("../..".into()),
             gz_command: "gz".into(),
             warmup_seconds: 1.0,
@@ -785,6 +847,7 @@ mod tests {
             resource_sample_interval_ms: 250,
             collect_capabilities: true,
             fingerprint_files: vec!["examples/minimal-world.sdf".into()],
+            configuration_files: Vec::new(),
         }
     }
 
@@ -830,6 +893,7 @@ mod tests {
         assert_eq!(parsed.resource_sample_interval_ms, 250);
         assert!(parsed.collect_capabilities);
         assert!(parsed.fingerprint_files.is_empty());
+        assert!(parsed.configuration_files.is_empty());
         assert!(parsed.message_check_topics.is_empty());
     }
 

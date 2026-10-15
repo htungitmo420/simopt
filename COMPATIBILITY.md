@@ -29,3 +29,9 @@ sensor subscribers before measurement, and the GUI process metrics reported
 zero CPU because descendant process groups were not tracked. Treat that archive
 as hardware-renderer and runtime evidence only. The upgraded loaded-drone suite
 supersedes it for GUI/headless performance evidence.
+
+The first sensor-isolation matrix used `gz topic -e` as a persistent load
+subscriber. It reliably identifies cameras as the dominant load, but the
+LiDAR-only case accumulated about 6.9 GiB RSS and exposed text-serialization
+backpressure in the harness. Absolute stress RTF and memory figures should be
+refreshed with the raw Transport sink before further compatibility claims.

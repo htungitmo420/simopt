@@ -37,6 +37,20 @@
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
     },
+    "load_subscriber": {
+      "description": "Optional lightweight subscriber command. Each {topic} token is replaced; when absent, the topic is appended.",
+      "type": ["object", "null"],
+      "required": ["program"],
+      "properties": {
+        "program": { "type": "string", "minLength": 1 },
+        "args": { "type": "array", "items": { "type": "string" } },
+        "environment": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
     "working_directory": { "type": ["string", "null"] },
     "gz_command": { "type": "string", "minLength": 1 },
     "warmup_seconds": { "type": "number", "minimum": 0 },
@@ -51,6 +65,12 @@
     "resource_sample_interval_ms": { "type": "integer", "minimum": 1 },
     "collect_capabilities": { "type": "boolean" },
     "fingerprint_files": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "configuration_files": {
+      "description": "Configuration artifacts hashed for provenance but excluded from workload-equivalence checks.",
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true

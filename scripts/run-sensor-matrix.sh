@@ -5,6 +5,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 output_root="${1:-${repo_root}/reports/sensor-isolation}"
 simopt_bin="${repo_root}/target/release/simopt"
 
+"${repo_root}/scripts/build-gz-topic-sink.sh"
+
 if [[ ! -x "${simopt_bin}" ]]; then
   echo "missing ${simopt_bin}; run cargo build --release --locked first" >&2
   exit 1

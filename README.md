@@ -154,12 +154,21 @@ performance gate when workload fingerprints or renderer identities differ. It
 also warns when both suites are pinned near RTF 1.0 and therefore cannot expose
 headroom.
 
-The stress scenarios use `load_topics` to keep minimal `gz topic` subscribers
+The stress scenarios use `load_topics` to keep lightweight subscribers
 connected throughout warm-up and measurement. This activates Gazebo's lazy
-camera and GPU LiDAR sensors. The subscriber processes are excluded from the
+camera and GPU LiDAR sensors. Build the repository's raw Gazebo Transport sink
+before running these scenarios:
+
+```bash
+bash scripts/build-gz-topic-sink.sh
+```
+
+The sink receives serialized protobuf bytes without formatting multi-megabyte
+camera or LiDAR messages as text. Subscriber processes are excluded from the
 Gazebo process-tree CPU/RSS metrics, while their effect on simulator RTF is
-retained. Because the CLI subscribers still deserialize sensor messages, keep
-the exact same topic list when comparing two configurations.
+retained. The matrix scripts build the sink automatically.
+It is a small C++ ABI adapter for Gazebo Transport; the portable analyzer and
+runner remain Rust, and this adapter is not a proposed replacement compute kernel.
 
 After establishing GUI versus headless behavior, run the headless sensor
 isolation matrix. It measures physics/IMU, front camera, dual cameras, GPU
@@ -187,6 +196,21 @@ commands can also be summarized in a chosen order:
 Treat adjacent-case differences as bottleneck indicators because rendering,
 transport, and sensor scheduling can overlap. A case pinned at RTF 1.0 only
 provides an upper bound on its cost.
+
+For interactive use, compare the default Gazebo GUI with two observer-only
+layouts and the headless reference:
+
+```bash
+bash scripts/run-gui-matrix.sh reports/gui-matrix
+```
+
+The 960x540 observer keeps a 3D view, mouse camera controls, camera tracking,
+play/pause, stepping, and world statistics. The 640x360 layout is a diagnostic
+compact view. Both remove entity editing, insertion, inspector, screenshot,
+copy/paste, and other plugins that are unnecessary when only observing a run.
+Sensor resolution and update rates remain unchanged.
+GUI configuration files are recorded under `configuration_files`; their hashes
+are retained for provenance but do not make the common world fingerprint differ.
 
 On a Jazzy installation, run the included end-to-end smoke test from WSL2 or
 Ubuntu after building the release binary:

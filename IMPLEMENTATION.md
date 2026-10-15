@@ -38,6 +38,11 @@ Updated: 2026-10-15
   including wall cost per simulated second and provenance consistency checks.
 - Repository scenarios and a runner script now isolate physics/IMU, the front
   camera, both cameras, GPU LiDAR, and the complete sensor set headlessly.
+- A raw Gazebo Transport sink activates lazy sensors without converting image
+  and laser protobuf payloads to terminal text. Scenario manifests can select a
+  custom persistent subscriber command with `{topic}` substitution.
+- A GUI matrix compares the default interface, observer-only 960x540 and
+  compact 640x360 layouts, and a headless reference without changing sensors.
 - A moving-drone reference world and paired GUI/headless scenarios exercise two
   cameras, a high-density GPU LiDAR, IMU, shadows, physics, and obstacle geometry.
   Persistent load-topic subscribers keep lazy rendering active during measurement.
@@ -124,6 +129,18 @@ Headless used about 1.07 measured Gazebo CPU cores and 396 MiB peak RSS, versus
 1.93 cores and 884 MiB for the GUI process tree. Both used the D3D12 GTX 1080 Ti
 renderer. Sensor cost still needs B2-B5 isolation before changing fidelity.
 
+The first B2-B5 matrix showed physics/IMU at RTF 0.9997, front camera at
+0.4229, two cameras at 0.3282, GPU LiDAR alone at 0.9983, and the full sensor
+set at 0.2841. This identifies cameras as the dominant load in this synthetic
+world. The LiDAR-only case also reached about 6.9 GiB RSS because the original
+`gz topic -e` load subscriber formatted high-rate laser messages as text faster
+than it could drain them. The raw Transport sink removes that harness artifact;
+the sensor and GUI matrices must be repeated with the new sink before selecting
+a fidelity change. On the development WSL2 host, the raw sink increased the
+five-second full-sensor smoke RTF from about 0.156 to 0.194.
+The observer-only GUI, custom subscriber, configuration fingerprint, and
+process-tree cleanup also passed together in a five-second integration run.
+
 The upgraded drone stress smoke run completed locally with all camera, LiDAR,
 and IMU streams active. On the development WSL2 software renderer it measured
 RTF 0.1560, 7.19 average CPU cores, and about 779 MiB peak RSS. This proves the
@@ -136,13 +153,14 @@ comparison because each smoke profile contains only one short repetition.
 
 ## Next implementation slice
 
-1. Run the new headless B2-B5 sensor-isolation matrix on the auxiliary machine.
-2. Repeat B0/B1 and the dominant B2-B5 cases on the actual drone world.
-3. Record the real drone launch, sensor specifications, physics step, bridge,
+1. Repeat the B2-B5 matrix with the raw Transport sink on the auxiliary machine.
+2. Run the default/observer/compact/headless GUI matrix and select an interactive layout.
+3. Repeat B0/B1 and the dominant camera cases on the actual drone world.
+4. Record the real drone launch, sensor specifications, physics step, bridge,
    perception, controller, and SITL configuration for B2-B7.
-4. Add quality-adapter hooks for obstacle-avoidance latency and accuracy gates.
-5. Add native Gazebo Transport collection after the CLI contract stabilizes.
-6. Only after profiling, select a compute kernel for a C++/Rust FFI spike.
+5. Add quality-adapter hooks for obstacle-avoidance latency and accuracy gates.
+6. Add native Gazebo Transport statistics collection after the CLI contract stabilizes.
+7. Only after profiling, select a compute kernel for a C++/Rust FFI spike.
 
 ## Verification
 

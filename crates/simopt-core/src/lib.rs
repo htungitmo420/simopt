@@ -184,6 +184,8 @@ pub struct BenchmarkFingerprint {
     pub algorithm: String,
     pub scenario: ArtifactFingerprint,
     pub workload_files: Vec<ArtifactFingerprint>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub configuration_files: Vec<ArtifactFingerprint>,
     pub capability_report: Option<ArtifactFingerprint>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_version: Option<String>,
@@ -1215,6 +1217,7 @@ mod tests {
                 size_bytes: 1,
                 digest: digest.into(),
             }],
+            configuration_files: Vec::new(),
             capability_report: None,
             tool_version: Some("0.1.0".into()),
             source_revision: None,
@@ -1264,6 +1267,7 @@ mod tests {
                     size_bytes: 1,
                     digest: "same-world".into(),
                 }],
+                configuration_files: Vec::new(),
                 capability_report: None,
                 tool_version: Some("0.1.0".into()),
                 source_revision: None,

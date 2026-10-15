@@ -249,6 +249,9 @@ schemas/                   # versioned JSON contracts
 - [x] Add a synthetic moving-drone stress world with two cameras, dense GPU LiDAR, IMU, shadows, collisions, and local obstacle assets.
 - [x] Confirm on the i7-4790 / GTX 1080 Ti that headless rendering improves the loaded-drone median RTF by 22.73% over GUI.
 - [x] Add reusable B2-B5 sensor-isolation scenarios and an ordered suite-matrix analyzer.
+- [x] Identify camera rendering as the dominant synthetic-workload cost in the first i7-4790 / GTX 1080 Ti isolation matrix.
+- [x] Replace persistent `gz topic -e` load generation with a raw Gazebo Transport sink to avoid text serialization and LiDAR backlog.
+- [x] Add default, observer-only, compact, and headless GUI comparison scenarios without reducing sensor fidelity.
 - [ ] Complete the B0–B7 matrix with the real camera/LiDAR drone workload.
 - [ ] Optimize Gazebo/ROS/C++ with evidence and retain rollback data.
 - [ ] Select one Rust kernel only when profiling establishes value.

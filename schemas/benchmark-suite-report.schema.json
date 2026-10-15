@@ -37,6 +37,10 @@
           "type": "array",
           "items": { "$ref": "#/$defs/artifact_fingerprint" }
         },
+        "configuration_files": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifact_fingerprint" }
+        },
         "capability_report": {
           "anyOf": [
             { "$ref": "#/$defs/artifact_fingerprint" },
