@@ -43,6 +43,12 @@ Updated: 2026-10-15
   custom persistent subscriber command with `{topic}` substitution.
 - A GUI matrix compares the default interface, observer-only 960x540 and
   compact 640x360 layouts, and a headless reference without changing sensors.
+- Scenario and suite reports can declare a `quality_profile`. Matrix output
+  carries the exact fidelity changes and warns that reduced profiles require
+  their declared workload-specific validation before adoption.
+- A compact-GUI camera matrix isolates update-rate and resolution changes,
+  includes a combined candidate, and repeats the unchanged reference at the end
+  to expose thermal or host-load drift.
 - A moving-drone reference world and paired GUI/headless scenarios exercise two
   cameras, a high-density GPU LiDAR, IMU, shadows, physics, and obstacle geometry.
   Persistent load-topic subscribers keep lazy rendering active during measurement.
@@ -50,7 +56,7 @@ Updated: 2026-10-15
 ## Verified in this workspace
 
 - Rust 1.85.0 on Ubuntu 24.04 WSL2.
-- `cargo fmt --all --check`, Clippy with warnings denied, and all 28 unit tests
+- `cargo fmt --all --check`, Clippy with warnings denied, and all 31 unit tests
   pass, including pause/reset segmentation and Gazebo JSON parsing.
 - Release CLI executed `doctor`, `analyze`, and `compare` successfully using
   sample data.
@@ -151,14 +157,25 @@ three Gazebo processes, 7.64 average CPU cores, and about 1.38 GiB peak RSS.
 That run verifies descendant-process accounting; it is not a performance
 comparison because each smoke profile contains only one short repetition.
 
+The raw-sink GUI matrix from the auxiliary i7-4790 / GTX 1080 Ti system is
+comparable across all four cases and contains no warnings. Median RTF was
+0.2231 for the default GUI, 0.2270 for the 960x540 observer, 0.2325 for the
+640x360 compact observer, and 0.2453 headless. The compact GUI improves RTF by
+4.21% over the default while retaining the interactive 3D view, camera control,
+play/pause, stepping, and RTF display. Headless is only 5.50% faster than the
+compact GUI in this matrix, so the compact observer is the selected interactive
+reference. All runs used Ogre2 D3D12 on the GTX 1080 Ti.
+
 ## Next implementation slice
 
-1. Repeat the B2-B5 matrix with the raw Transport sink on the auxiliary machine.
-2. Run the default/observer/compact/headless GUI matrix and select an interactive layout.
+1. Run the compact-GUI camera fidelity matrix on the auxiliary machine and use
+   its end reference to reject results affected by drift.
+2. Repeat the B2-B5 matrix with the raw Transport sink on the auxiliary machine.
 3. Repeat B0/B1 and the dominant camera cases on the actual drone world.
 4. Record the real drone launch, sensor specifications, physics step, bridge,
    perception, controller, and SITL configuration for B2-B7.
-5. Add quality-adapter hooks for obstacle-avoidance latency and accuracy gates.
+5. Execute the declared obstacle-avoidance latency and accuracy validations;
+   then add adapters for the real stack's result format.
 6. Add native Gazebo Transport statistics collection after the CLI contract stabilizes.
 7. Only after profiling, select a compute kernel for a C++/Rust FFI spike.
 

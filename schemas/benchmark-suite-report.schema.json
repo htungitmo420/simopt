@@ -60,6 +60,7 @@
       },
       "additionalProperties": false
     },
+    "quality_profile": { "$ref": "#/$defs/quality_profile" },
     "warnings": { "type": "array", "items": { "type": "string" } }
   },
   "$defs": {
@@ -70,6 +71,17 @@
         "path": { "type": "string", "minLength": 1 },
         "size_bytes": { "type": "integer", "minimum": 0 },
         "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "quality_profile": {
+      "type": "object",
+      "required": ["name", "fidelity"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "fidelity": { "enum": ["reference", "reduced", "custom"] },
+        "changes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "required_validations": { "type": "array", "items": { "type": "string", "minLength": 1 } }
       },
       "additionalProperties": false
     }

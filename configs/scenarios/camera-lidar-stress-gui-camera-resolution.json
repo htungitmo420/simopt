@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "label": "camera-lidar-stress-gui-camera-resolution",
+  "launch": {
+    "program": "gz",
+    "args": ["sim", "-r", "--gui-config", "configs/gazebo/gui-observer-640x360.config", "examples/camera-lidar-stress-camera-resolution-world.sdf"],
+    "environment": {}
+  },
+  "stats_topic": "/world/simopt_sensor_stress/stats",
+  "required_topics": ["/simopt/stress/camera", "/simopt/stress/down_camera", "/simopt/stress/lidar", "/simopt/stress/imu"],
+  "message_check_topics": ["/simopt/stress/camera", "/simopt/stress/down_camera", "/simopt/stress/lidar", "/simopt/stress/imu"],
+  "load_topics": ["/simopt/stress/camera", "/simopt/stress/down_camera", "/simopt/stress/lidar"],
+  "load_subscriber": {"program": "target/gz-topic-sink", "args": ["{topic}"], "environment": {}},
+  "working_directory": "../..",
+  "gz_command": "gz",
+  "warmup_seconds": 30.0,
+  "duration_seconds": 60.0,
+  "repeats": 3,
+  "startup_timeout_seconds": 45.0,
+  "message_timeout_seconds": 20.0,
+  "shutdown_grace_seconds": 5.0,
+  "inter_run_delay_seconds": 1.0,
+  "window_seconds": 1.0,
+  "collect_process_metrics": true,
+  "resource_sample_interval_ms": 250,
+  "collect_capabilities": true,
+  "fingerprint_files": ["examples/camera-lidar-stress-world.sdf"],
+  "configuration_files": ["configs/gazebo/gui-observer-640x360.config", "examples/camera-lidar-stress-camera-resolution-world.sdf"],
+  "quality_profile": {
+    "name": "reduced-camera-resolution",
+    "fidelity": "reduced",
+    "changes": ["front camera resolution: 1920x1080 -> 1280x720", "down camera resolution: 1280x720 -> 640x360"],
+    "required_validations": ["small-obstacle detection recall by distance", "minimum safe detection distance", "collision-free mission completion"]
+  }
+}

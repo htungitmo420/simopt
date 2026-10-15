@@ -25,5 +25,11 @@
   "resource_sample_interval_ms": 250,
   "collect_capabilities": true,
   "fingerprint_files": ["examples/camera-lidar-stress-world.sdf"],
-  "configuration_files": ["configs/gazebo/gui-observer-640x360.config"]
+  "configuration_files": ["configs/gazebo/gui-observer-640x360.config"],
+  "quality_profile": {
+    "name": "full-sensor-reference",
+    "fidelity": "reference",
+    "changes": [],
+    "required_validations": []
+  }
 }

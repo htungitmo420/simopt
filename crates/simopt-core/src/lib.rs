@@ -150,6 +150,8 @@ pub struct SuiteMatrixCase {
     pub median_average_cpu_cores: Option<f64>,
     pub maximum_peak_rss_bytes: Option<u64>,
     pub renderers: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quality_profile: Option<QualityProfile>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -176,7 +178,31 @@ pub struct BenchmarkSuiteReport {
     pub runs: Vec<BenchmarkReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fingerprint: Option<BenchmarkFingerprint>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quality_profile: Option<QualityProfile>,
     pub warnings: Vec<String>,
+}
+
+/// Declares whether a benchmark case changes simulation fidelity.
+///
+/// This is intentionally descriptive. A reduced-fidelity profile still needs
+/// workload-specific validation before it can be selected for real use.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct QualityProfile {
+    pub name: String,
+    pub fidelity: QualityFidelity,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_validations: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QualityFidelity {
+    Reference,
+    Reduced,
+    Custom,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -741,6 +767,7 @@ pub fn summarize_suite_matrix(
                     .filter_map(|run| run.process_metrics.as_ref()?.peak_rss_bytes)
                     .max(),
                 renderers: suite_renderer_names(suite),
+                quality_profile: suite.quality_profile.clone(),
             }
         })
         .collect::<Vec<_>>();
@@ -783,6 +810,16 @@ pub fn summarize_suite_matrix(
         if (0.97..=1.03).contains(&case.median_rtf) && case.p05_rtf >= 0.95 {
             warnings.push(format!(
                 "{} is near the real-time cap; its isolated cost may be hidden",
+                case.label
+            ));
+        }
+        if case
+            .quality_profile
+            .as_ref()
+            .is_some_and(|profile| profile.fidelity == QualityFidelity::Reduced)
+        {
+            warnings.push(format!(
+                "{} reduces simulation fidelity; complete its declared quality validations before adoption",
                 case.label
             ));
         }
@@ -940,6 +977,7 @@ pub fn aggregate_reports(
         window_p05_rtf: distribution(&mut window_p05_rtf),
         runs: reports.to_vec(),
         fingerprint: None,
+        quality_profile: None,
         warnings,
     })
 }
@@ -1275,7 +1313,13 @@ mod tests {
             suite
         };
         let baseline = make_suite("physics", 10.0);
-        let camera = make_suite("camera", 5.0);
+        let mut camera = make_suite("camera", 5.0);
+        camera.quality_profile = Some(QualityProfile {
+            name: "lower-camera-rate".into(),
+            fidelity: QualityFidelity::Reduced,
+            changes: vec!["front camera: 60 Hz -> 30 Hz".into()],
+            required_validations: vec!["obstacle detection recall".into()],
+        });
 
         let matrix = summarize_suite_matrix(&[baseline, camera]).unwrap();
 
@@ -1291,5 +1335,16 @@ mod tests {
             matrix.cases[1].additional_wall_seconds_per_sim_second,
             Some(1.0)
         );
+        assert_eq!(
+            matrix.cases[1]
+                .quality_profile
+                .as_ref()
+                .map(|profile| profile.name.as_str()),
+            Some("lower-camera-rate")
+        );
+        assert!(matrix
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("reduces simulation fidelity")));
     }
 }

@@ -252,6 +252,9 @@ schemas/                   # versioned JSON contracts
 - [x] Identify camera rendering as the dominant synthetic-workload cost in the first i7-4790 / GTX 1080 Ti isolation matrix.
 - [x] Replace persistent `gz topic -e` load generation with a raw Gazebo Transport sink to avoid text serialization and LiDAR backlog.
 - [x] Add default, observer-only, compact, and headless GUI comparison scenarios without reducing sensor fidelity.
+- [x] Select the compact 640x360 observer on the i7-4790 / GTX 1080 Ti; it improves median RTF by 4.21% over the default GUI while retaining interactive viewing.
+- [x] Add explicit quality-profile metadata and a camera rate/resolution matrix with an end-of-run reference control.
+- [ ] Run the compact-GUI camera fidelity matrix and validate any candidate on the real obstacle-avoidance mission.
 - [ ] Complete the B0–B7 matrix with the real camera/LiDAR drone workload.
 - [ ] Optimize Gazebo/ROS/C++ with evidence and retain rollback data.
 - [ ] Select one Rust kernel only when profiling establishes value.

@@ -212,6 +212,26 @@ Sensor resolution and update rates remain unchanged.
 GUI configuration files are recorded under `configuration_files`; their hashes
 are retained for provenance but do not make the common world fingerprint differ.
 
+After choosing an interactive layout, measure camera trade-offs without turning
+off the GUI:
+
+```bash
+bash scripts/run-camera-fidelity-matrix.sh reports/camera-fidelity-matrix
+```
+
+This runs the full-sensor compact GUI reference, a camera-rate-only profile, a
+camera-resolution-only profile, a combined profile, and the unchanged reference
+again as a drift control. The reduced profiles keep physics, trajectory, scene,
+LiDAR, IMU, and the 640x360 observer GUI unchanged. Each suite and matrix case
+contains a `quality_profile` with the exact fidelity changes and the validation
+that must pass before adoption. A faster reduced profile is only a performance
+candidate; validate detection recall, safe detection distance, end-to-end
+latency, and collision-free mission completion on the real drone stack.
+
+The matrix takes roughly 25 minutes with the committed measurement policy. Set
+`SIMOPT_MATRIX_COOLDOWN_SECONDS` to change the ten-second pause between cases.
+The reference at both ends reveals temperature or background-load drift.
+
 On a Jazzy installation, run the included end-to-end smoke test from WSL2 or
 Ubuntu after building the release binary:
 

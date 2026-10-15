@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use simopt_core::{
     aggregate_reports, analyze_samples, ArtifactFingerprint, BenchmarkFingerprint,
-    BenchmarkSuiteReport, SourceRevision,
+    BenchmarkSuiteReport, QualityProfile, SourceRevision,
 };
 use std::{
     collections::BTreeMap,
@@ -64,6 +64,8 @@ pub struct ScenarioManifest {
     pub fingerprint_files: Vec<PathBuf>,
     #[serde(default)]
     pub configuration_files: Vec<PathBuf>,
+    #[serde(default)]
+    pub quality_profile: Option<QualityProfile>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -253,6 +255,7 @@ pub fn run(scenario_path: &Path, output_override: Option<&Path>) -> Result<PathB
     )
     .map_err(|error| error.to_string())?;
     suite.fingerprint = Some(fingerprint);
+    suite.quality_profile = manifest.quality_profile.clone();
     let suite_path = output_directory.join("suite.json");
     crate::write_json(Some(&suite_path), &suite)?;
     print_summary(&suite);
@@ -335,6 +338,22 @@ fn validate_manifest(manifest: &ScenarioManifest) -> Result<(), String> {
         .any(|path| path.as_os_str().is_empty())
     {
         return Err("configuration_files cannot contain an empty path".into());
+    }
+    if let Some(profile) = &manifest.quality_profile {
+        if profile.name.trim().is_empty() {
+            return Err("quality_profile.name cannot be empty".into());
+        }
+        if profile
+            .changes
+            .iter()
+            .chain(profile.required_validations.iter())
+            .any(|value| value.trim().is_empty())
+        {
+            return Err(
+                "quality_profile changes and required_validations cannot contain empty values"
+                    .into(),
+            );
+        }
     }
     Ok(())
 }
@@ -848,6 +867,7 @@ mod tests {
             collect_capabilities: true,
             fingerprint_files: vec!["examples/minimal-world.sdf".into()],
             configuration_files: Vec::new(),
+            quality_profile: None,
         }
     }
 

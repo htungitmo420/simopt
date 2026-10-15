@@ -74,6 +74,29 @@
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
+    },
+    "quality_profile": {
+      "description": "Explicit fidelity changes and workload-specific validation required before adopting this profile.",
+      "$ref": "#/$defs/quality_profile"
+    }
+  },
+  "$defs": {
+    "quality_profile": {
+      "type": "object",
+      "required": ["name", "fidelity"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "fidelity": { "enum": ["reference", "reduced", "custom"] },
+        "changes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "required_validations": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

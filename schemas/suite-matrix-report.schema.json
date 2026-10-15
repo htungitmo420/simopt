@@ -45,7 +45,18 @@
           "additional_wall_seconds_per_sim_second": { "type": ["number", "null"] },
           "median_average_cpu_cores": { "type": ["number", "null"], "minimum": 0 },
           "maximum_peak_rss_bytes": { "type": ["integer", "null"], "minimum": 0 },
-          "renderers": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+          "renderers": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+          "quality_profile": {
+            "type": "object",
+            "required": ["name", "fidelity"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "fidelity": { "enum": ["reference", "reduced", "custom"] },
+              "changes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+              "required_validations": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+            },
+            "additionalProperties": false
+          }
         },
         "additionalProperties": false
       }

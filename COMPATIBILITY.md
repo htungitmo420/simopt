@@ -8,7 +8,7 @@ workload is fast on that platform.
 
 | Platform | Hardware | Software | Renderer evidence | Build | Runtime | Performance evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| WSL2 | Intel i7-4790, 8 logical CPUs, 15.5 GiB RAM, GTX 1080 Ti | Ubuntu 24.04 environment, ROS 2 Jazzy, Gazebo Sim 8.15.0, NVIDIA driver 582.53 | Ogre2 `D3D12 (NVIDIA GeForce GTX 1080 Ti)` in all loaded-drone runs | Pass | Loaded camera/GPU-LiDAR messages, process-tree cleanup, and repeated collection pass | Loaded-drone headless median RTF 0.2796 versus GUI 0.2278; comparable headless gain 22.73%. Headless used about 1.07 Gazebo CPU cores and 396 MiB peak RSS; GUI used 1.93 cores and 884 MiB. Sensor isolation and the real drone stack remain pending. |
+| WSL2 | Intel i7-4790, 8 logical CPUs, 15.5 GiB RAM, GTX 1080 Ti | Ubuntu 24.04 environment, ROS 2 Jazzy, Gazebo Sim 8.15.0, NVIDIA driver 582.53 | Ogre2 `D3D12 (NVIDIA GeForce GTX 1080 Ti)` in all loaded-drone runs | Pass | Loaded camera/GPU-LiDAR messages, native sink, process-tree cleanup, and repeated collection pass | Raw-sink matrix: default GUI median RTF 0.2231, 960x540 observer 0.2270, compact 640x360 observer 0.2325, headless 0.2453. Compact improves 4.21% over default; headless improves 5.50% over compact. Sensor isolation with the raw sink and the real drone stack remain pending. |
 | WSL2 | AMD Ryzen 5 6600H, RTX 3050 Ti, 32 GiB RAM | ROS 2 Jazzy, Gazebo Sim 8.15.0 | Controlled reference runs reported Ogre2 `llvmpipe`; an earlier log reported D3D12 | Pass | Minimal and camera/GPU-LiDAR reference worlds pass | Light reference reached approximately RTF 1.0, but software rendering invalidates GPU-performance conclusions. |
 | Ubuntu 24.04 GitHub Actions | Hosted x86_64 runner; no Gazebo GPU assigned | Rust 1.85 | Not tested | Rust format, Clippy, unit tests, offline doctor, and sample analysis pass | Gazebo runtime not tested | None |
 
@@ -35,3 +35,11 @@ subscriber. It reliably identifies cameras as the dominant load, but the
 LiDAR-only case accumulated about 6.9 GiB RSS and exposed text-serialization
 backpressure in the harness. Absolute stress RTF and memory figures should be
 refreshed with the raw Transport sink before further compatibility claims.
+
+The raw-sink GUI matrix has now been repeated on the i7-4790 / GTX 1080 Ti.
+All four cases used the same world fingerprint, timing policy, and D3D12
+renderer. The compact observer reached median RTF 0.2325 versus 0.2231 for the
+default GUI, a 4.21% improvement. Its maximum Gazebo process-tree RSS was about
+890 MB versus 921 MB for the default. Headless reached 0.2453, only 5.50% above
+compact, while using about 417 MB peak RSS. This supersedes the earlier 22.73%
+GUI/headless estimate, which used the text subscriber and default GUI only.
