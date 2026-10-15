@@ -62,12 +62,14 @@ fn monitor_process_group(
     let mut previous_ticks = HashMap::new();
     let mut accumulated_ticks = 0u64;
     let mut peak_rss_bytes = 0u64;
+    let mut peak_process_count = 0usize;
     let mut sample_count = 0usize;
     let mut warnings = Vec::new();
 
     loop {
-        match sample_linux_process_group(process_group) {
+        match sample_linux_process_tree_and_group(process_group) {
             Ok(processes) => {
+                peak_process_count = peak_process_count.max(processes.len());
                 let mut current_pids = HashSet::new();
                 let mut rss_bytes = 0u64;
                 for process in processes {
@@ -101,16 +103,22 @@ fn monitor_process_group(
         warnings.push("getconf CLK_TCK was unavailable; CPU time could not be calculated".into());
     }
     if sample_count == 0 {
-        warnings.push("no Linux process-group resource samples were collected".into());
+        warnings.push("no Linux process-tree resource samples were collected".into());
+    } else if accumulated_ticks == 0 {
+        warnings.push(
+            "the observed process tree used zero CPU ticks; a detached workload may not have been captured"
+                .into(),
+        );
     }
 
     ProcessMetrics {
-        source: "linux-procfs-process-group".into(),
+        source: "linux-procfs-process-tree-and-group".into(),
         sample_count,
         wall_time_s,
         cpu_time_s,
         average_cpu_cores,
         peak_rss_bytes: (sample_count > 0).then_some(peak_rss_bytes),
+        peak_process_count: (peak_process_count > 0).then_some(peak_process_count),
         warnings,
     }
 }
@@ -132,21 +140,23 @@ fn monitor_process_group(
         cpu_time_s: None,
         average_cpu_cores: None,
         peak_rss_bytes: None,
+        peak_process_count: None,
         warnings: vec!["process-group metrics are currently implemented only on Linux".into()],
     }
 }
 
 #[cfg(target_os = "linux")]
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct LinuxProcessSample {
     pid: u32,
+    parent_pid: u32,
     process_group: u32,
     cpu_ticks: u64,
     rss_bytes: Option<u64>,
 }
 
 #[cfg(target_os = "linux")]
-fn sample_linux_process_group(process_group: u32) -> Result<Vec<LinuxProcessSample>, String> {
+fn sample_linux_process_tree_and_group(root_pid: u32) -> Result<Vec<LinuxProcessSample>, String> {
     let entries =
         fs::read_dir("/proc").map_err(|error| format!("could not read /proc: {error}"))?;
     let mut samples = Vec::new();
@@ -162,36 +172,68 @@ fn sample_linux_process_group(process_group: u32) -> Result<Vec<LinuxProcessSamp
             Ok(value) => value,
             Err(_) => continue,
         };
-        let Some((sample_group, cpu_ticks)) = parse_proc_stat(&stat) else {
+        let Some((parent_pid, sample_group, cpu_ticks)) = parse_proc_stat(&stat) else {
             continue;
         };
-        if sample_group != process_group {
-            continue;
-        }
         let rss_bytes = fs::read_to_string(entry.path().join("status"))
             .ok()
             .and_then(|status| parse_vm_rss_bytes(&status));
         samples.push(LinuxProcessSample {
             pid,
+            parent_pid,
             process_group: sample_group,
             cpu_ticks,
             rss_bytes,
         });
     }
-    Ok(samples)
+    Ok(select_process_tree_and_group(samples, root_pid))
 }
 
 #[cfg(target_os = "linux")]
-fn parse_proc_stat(stat: &str) -> Option<(u32, u64)> {
+fn select_process_tree_and_group(
+    samples: Vec<LinuxProcessSample>,
+    root_pid: u32,
+) -> Vec<LinuxProcessSample> {
+    let mut selected = samples
+        .iter()
+        .filter(|sample| sample.pid == root_pid || sample.process_group == root_pid)
+        .map(|sample| sample.pid)
+        .collect::<HashSet<_>>();
+
+    loop {
+        let before = selected.len();
+        for sample in &samples {
+            if selected.contains(&sample.parent_pid) {
+                selected.insert(sample.pid);
+            }
+        }
+        if selected.len() == before {
+            break;
+        }
+    }
+
+    samples
+        .into_iter()
+        .filter(|sample| selected.contains(&sample.pid))
+        .collect()
+}
+
+#[cfg(target_os = "linux")]
+fn parse_proc_stat(stat: &str) -> Option<(u32, u32, u64)> {
     let command_end = stat.rfind(')')?;
     let fields = stat
         .get(command_end + 1..)?
         .split_whitespace()
         .collect::<Vec<_>>();
+    let parent_pid = fields.get(1)?.parse().ok()?;
     let process_group = fields.get(2)?.parse().ok()?;
     let user_ticks = fields.get(11)?.parse::<u64>().ok()?;
     let system_ticks = fields.get(12)?.parse::<u64>().ok()?;
-    Some((process_group, user_ticks.saturating_add(system_ticks)))
+    Some((
+        parent_pid,
+        process_group,
+        user_ticks.saturating_add(system_ticks),
+    ))
 }
 
 #[cfg(target_os = "linux")]
@@ -227,12 +269,38 @@ mod tests {
     #[test]
     fn parses_proc_stat_with_spaces_in_command() {
         let stat = "123 (gz sim server) S 1 456 456 0 -1 0 0 0 0 0 120 30 0 0 20 0 4 0 1 1000 20";
-        assert_eq!(parse_proc_stat(stat), Some((456, 150)));
+        assert_eq!(parse_proc_stat(stat), Some((1, 456, 150)));
     }
 
     #[test]
     fn parses_rss_from_proc_status() {
         let status = "Name:\tgz\nVmSize:\t1000 kB\nVmRSS:\t2048 kB\n";
         assert_eq!(parse_vm_rss_bytes(status), Some(2_097_152));
+    }
+
+    #[test]
+    fn selects_process_group_and_descendants_in_new_groups() {
+        let sample = |pid, parent_pid, process_group| LinuxProcessSample {
+            pid,
+            parent_pid,
+            process_group,
+            cpu_ticks: 1,
+            rss_bytes: Some(1024),
+        };
+        let selected = select_process_tree_and_group(
+            vec![
+                sample(100, 1, 100),
+                sample(101, 100, 100),
+                sample(200, 101, 200),
+                sample(201, 200, 200),
+                sample(300, 1, 300),
+            ],
+            100,
+        );
+
+        assert_eq!(
+            selected.iter().map(|item| item.pid).collect::<Vec<_>>(),
+            vec![100, 101, 200, 201]
+        );
     }
 }

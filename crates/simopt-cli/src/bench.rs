@@ -31,6 +31,8 @@ pub struct ScenarioManifest {
     #[serde(default)]
     pub message_check_topics: Vec<String>,
     #[serde(default)]
+    pub load_topics: Vec<String>,
+    #[serde(default)]
     pub working_directory: Option<PathBuf>,
     #[serde(default = "default_gz_command")]
     pub gz_command: PathBuf,
@@ -141,6 +143,7 @@ pub fn run(scenario_path: &Path, output_override: Option<&Path>) -> Result<PathB
         let ready_topics = std::iter::once(manifest.stats_topic.as_str())
             .chain(manifest.required_topics.iter().map(String::as_str))
             .chain(manifest.message_check_topics.iter().map(String::as_str))
+            .chain(manifest.load_topics.iter().map(String::as_str))
             .collect::<Vec<_>>();
         wait_for_topics(
             &manifest.gz_command,
@@ -148,6 +151,8 @@ pub fn run(scenario_path: &Path, output_override: Option<&Path>) -> Result<PathB
             Duration::from_secs_f64(manifest.startup_timeout_seconds),
             &mut process,
         )?;
+        let mut load_subscribers =
+            TopicSubscribers::start(&manifest.gz_command, &manifest.load_topics)?;
         verify_topic_messages(
             &manifest.gz_command,
             &manifest.message_check_topics,
@@ -159,6 +164,7 @@ pub fn run(scenario_path: &Path, output_override: Option<&Path>) -> Result<PathB
             Duration::from_secs_f64(manifest.warmup_seconds),
             "warm-up",
         )?;
+        load_subscribers.ensure_running()?;
 
         let resource_monitor = manifest.collect_process_metrics.then(|| {
             crate::resources::ResourceMonitor::start(
@@ -177,6 +183,8 @@ pub fn run(scenario_path: &Path, output_override: Option<&Path>) -> Result<PathB
             .transpose()?;
         let renderer_result = crate::doctor::renderer_identity_since(process.started_at());
         let sample_count = collection_result?;
+        load_subscribers.ensure_running()?;
+        load_subscribers.stop();
         process.terminate(Duration::from_secs_f64(manifest.shutdown_grace_seconds))?;
 
         let samples = crate::read_samples(&csv_path)?;
@@ -267,6 +275,13 @@ fn validate_manifest(manifest: &ScenarioManifest) -> Result<(), String> {
         .any(|topic| topic.trim().is_empty())
     {
         return Err("message_check_topics cannot contain an empty topic".into());
+    }
+    if manifest
+        .load_topics
+        .iter()
+        .any(|topic| topic.trim().is_empty())
+    {
+        return Err("load_topics cannot contain an empty topic".into());
     }
     if manifest.repeats == 0 {
         return Err("repeats must be greater than zero".into());
@@ -502,6 +517,66 @@ fn print_summary(suite: &BenchmarkSuiteReport) {
     );
 }
 
+struct TopicSubscribers {
+    children: Vec<(String, Child)>,
+}
+
+impl TopicSubscribers {
+    fn start(gz_command: &Path, topics: &[String]) -> Result<Self, String> {
+        let mut subscribers = Self {
+            children: Vec::with_capacity(topics.len()),
+        };
+        for topic in topics {
+            let mut command = Command::new(gz_command);
+            command
+                .args(["topic", "-e", "-t", topic])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            #[cfg(unix)]
+            command.process_group(0);
+            let child = command.spawn().map_err(|error| {
+                format!("could not start persistent subscriber for {topic}: {error}")
+            })?;
+            subscribers.children.push((topic.clone(), child));
+        }
+        Ok(subscribers)
+    }
+
+    fn ensure_running(&mut self) -> Result<(), String> {
+        for (topic, child) in &mut self.children {
+            match child.try_wait() {
+                Ok(None) => {}
+                Ok(Some(status)) => {
+                    return Err(format!(
+                        "persistent subscriber for {topic} exited early with {status}"
+                    ));
+                }
+                Err(error) => {
+                    return Err(format!(
+                        "could not inspect persistent subscriber for {topic}: {error}"
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn stop(&mut self) {
+        for (_, child) in &mut self.children {
+            let _ = terminate_child(child, true);
+            let _ = child.wait();
+        }
+        self.children.clear();
+    }
+}
+
+impl Drop for TopicSubscribers {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
 struct ManagedProcess {
     child: Child,
     log_path: PathBuf,
@@ -695,6 +770,7 @@ mod tests {
             stats_topic: "/world/default/stats".into(),
             required_topics: Vec::new(),
             message_check_topics: Vec::new(),
+            load_topics: Vec::new(),
             working_directory: Some("../..".into()),
             gz_command: "gz".into(),
             warmup_seconds: 1.0,

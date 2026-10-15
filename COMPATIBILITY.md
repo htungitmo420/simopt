@@ -1,6 +1,6 @@
 # Compatibility evidence
 
-Updated: 2026-10-14
+Updated: 2026-10-15
 
 This matrix separates successful builds, runtime compatibility, and meaningful
 performance evidence. A build or smoke test does not imply that every Gazebo
@@ -22,3 +22,10 @@ workload is fast on that platform.
   capability probe collected before Gazebo starts.
 - The i7-4790 / GTX 1080 Ti system still needs the real drone B0-B7 matrix before
   any C++-to-Rust kernel choice is justified.
+
+The imported stationary stress pair on the i7-4790 / GTX 1080 Ti also stayed at
+RTF 1.0 in GUI and headless modes. It used the previous runner, which released
+sensor subscribers before measurement, and the GUI process metrics reported
+zero CPU because descendant process groups were not tracked. Treat that archive
+as hardware-renderer and runtime evidence only. The upgraded moving-drone suite
+must be rerun before comparing GUI and headless performance.

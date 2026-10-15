@@ -242,9 +242,11 @@ schemas/                   # versioned JSON contracts
 - [x] Implement a minimal Rust collector for Gazebo WorldStatistics JSON.
 - [x] Validate collection on Gazebo Sim 8.15.0 / Harmonic in WSL2.
 - [x] Implement a repeated benchmark runner with warm-up, readiness checks, logs, process-group cleanup, per-run reports, and suite aggregation.
-- [x] Add Linux process-group CPU time, average CPU-core use, and peak RSS to each run, with configurable sampling.
+- [x] Add Linux process-tree CPU time, average CPU-core use, peak RSS, and peak process count to each run, with configurable sampling.
 - [x] Add a versioned environment and workload fingerprint to the suite report.
 - [x] Add a repository-owned camera/GPU-LiDAR world with per-run renderer identity and pre-measurement sensor-message readiness checks.
+- [x] Keep declared sensor topics subscribed during measurement so lazy camera and GPU LiDAR work is actually included.
+- [x] Add a synthetic moving-drone stress world with two cameras, dense GPU LiDAR, IMU, shadows, collisions, and local obstacle assets.
 - [ ] Complete the B0–B7 matrix with the real camera/LiDAR drone workload.
 - [ ] Optimize Gazebo/ROS/C++ with evidence and retain rollback data.
 - [ ] Select one Rust kernel only when profiling establishes value.

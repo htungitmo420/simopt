@@ -82,8 +82,8 @@ capability snapshot, and declared workload files with SHA-256, and records the
 `simopt` version plus Git commit and dirty state when a repository is available.
 Each run records the renderer identity written by Gazebo after launch, so an old
 Ogre2 log or a WSL renderer change is not silently attributed to the current
-measurement. On Linux it also samples CPU time, average CPU-core use, and peak
-RSS for the complete launch process group during each capture. Set
+measurement. On Linux it also samples CPU time, average CPU-core use, peak RSS,
+and peak process count for the launch process tree and process group during each capture. Set
 `collect_process_metrics` to `false` to measure without this sampler, or adjust
 `resource_sample_interval_ms`. The included scenario uses two short repetitions
 for smoke testing; use at least three longer repetitions for performance
@@ -111,8 +111,27 @@ cargo run --release -p simopt-cli -- inspect-suite \
   --output reports/camera-lidar/diagnostic.json
 ```
 
-The repository also includes a 1280x720 60 Hz camera and 2048x64 20 Hz GPU
-LiDAR stress profile. Run the headless and GUI profiles on the same machine:
+The repository also includes a synthetic flying-drone stress profile with a
+1920x1080 60 Hz forward camera, 1280x720 30 Hz downward camera, 4096x128 20 Hz
+GPU LiDAR, 400 Hz IMU, shadows, collision geometry, and a dense obstacle field.
+The drone follows a curved velocity-controlled path. This is a repeatable load
+generator, not an aerodynamic model or an obstacle-avoidance quality test.
+
+First run the short smoke profile. It validates the world and sensor streams but
+is too short for a performance decision:
+
+```bash
+cargo run --release -p simopt-cli -- bench \
+  --scenario configs/scenarios/camera-lidar-stress-smoke.json \
+  --output-dir reports/stress-smoke
+
+# Optional: also verify GUI launch and process-tree accounting.
+cargo run --release -p simopt-cli -- bench \
+  --scenario configs/scenarios/camera-lidar-stress-gui-smoke.json \
+  --output-dir reports/stress-gui-smoke
+```
+
+Then run the headless and GUI profiles on the same machine:
 
 ```bash
 cargo run --release -p simopt-cli -- bench \
@@ -134,6 +153,13 @@ cargo run --release -p simopt-cli -- compare-suites \
 performance gate when workload fingerprints or renderer identities differ. It
 also warns when both suites are pinned near RTF 1.0 and therefore cannot expose
 headroom.
+
+The stress scenarios use `load_topics` to keep minimal `gz topic` subscribers
+connected throughout warm-up and measurement. This activates Gazebo's lazy
+camera and GPU LiDAR sensors. The subscriber processes are excluded from the
+Gazebo process-tree CPU/RSS metrics, while their effect on simulator RTF is
+retained. Because the CLI subscribers still deserialize sensor messages, keep
+the exact same topic list when comparing two configurations.
 
 On a Jazzy installation, run the included end-to-end smoke test from WSL2 or
 Ubuntu after building the release binary:

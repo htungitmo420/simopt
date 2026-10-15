@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated: 2026-10-13
+Updated: 2026-10-15
 
 ## Implemented
 
@@ -18,8 +18,9 @@ Updated: 2026-10-13
   without a shell, waits for required Gazebo topics and optional real messages,
   warms up, repeats fixed wall-duration captures, cleans up its process group,
   and writes per-run and aggregate reports.
-- Optional Linux process-group monitoring records CPU time, average CPU-core
-  use, and peak RSS during each measured interval.
+- Optional Linux process-tree and process-group monitoring records CPU time,
+  average CPU-core use, peak RSS, and peak process count during each measured
+  interval, including Gazebo workers that create a new process group.
 - Each repeated suite includes SHA-256 fingerprints for its scenario,
   capability snapshot, and declared workload files, plus tool version and Git
   source revision when available.
@@ -33,8 +34,9 @@ Updated: 2026-10-13
 - Suite diagnosis classifies real-time-capped, below-real-time, faster-than-real-time,
   unstable, and inconclusive workloads. Repeated-suite comparison checks workload
   fingerprints and renderer identity before evaluating its performance gate.
-- A heavier camera/GPU-LiDAR reference world and paired GUI/headless scenarios
-  provide a portable B0/B1-style experiment before the real drone is available.
+- A moving-drone reference world and paired GUI/headless scenarios exercise two
+  cameras, a high-density GPU LiDAR, IMU, shadows, physics, and obstacle geometry.
+  Persistent load-topic subscribers keep lazy rendering active during measurement.
 
 ## Verified in this workspace
 
@@ -102,10 +104,28 @@ and a 316,166,144-byte peak RSS. The suite diagnostic correctly classifies this
 reference workload as real-time capped, so it is compatibility and stability
 evidence rather than evidence about the reported RTF 0.30 drone workload.
 
+A second imported GUI/headless stress pair was also capped near RTF 1.0. The
+old stress world was stationary and its sensor-check subscribers exited before
+measurement, so it did not maintain camera or LiDAR load. GUI CPU/RSS metrics
+were also incomplete because the older collector followed only one process
+group. These results remain renderer/runtime evidence but cannot establish a
+GUI-versus-headless speedup. The runner now keeps declared `load_topics`
+subscribed and follows descendant processes across process groups.
+
+The upgraded drone stress smoke run completed locally with all camera, LiDAR,
+and IMU streams active. On the development WSL2 software renderer it measured
+RTF 0.1560, 7.19 average CPU cores, and about 779 MiB peak RSS. This proves the
+new workload exposes a bottleneck; software rendering and the five-second
+single repetition make it unsuitable for cross-host performance claims.
+The matching GUI smoke reached RTF 0.1206 and the corrected sampler observed
+three Gazebo processes, 7.64 average CPU cores, and about 1.38 GiB peak RSS.
+That run verifies descendant-process accounting; it is not a performance
+comparison because each smoke profile contains only one short repetition.
+
 ## Next implementation slice
 
-1. Run the new stress GUI/headless pair on the auxiliary machine, then repeat
-   B0/B1 on the actual drone world.
+1. Run the upgraded loaded-drone stress GUI/headless pair on the auxiliary
+   machine, then repeat B0/B1 on the actual drone world.
 2. Record the real drone launch, sensor specifications, physics step, bridge,
    perception, controller, and SITL configuration for B2-B7.
 3. Add quality-adapter hooks for obstacle-avoidance latency and accuracy gates.

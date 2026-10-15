@@ -13,8 +13,9 @@
     "environment": {}
   },
   "stats_topic": "/world/simopt_sensor_stress/stats",
-  "required_topics": ["/simopt/stress/camera", "/simopt/stress/lidar"],
-  "message_check_topics": ["/simopt/stress/camera", "/simopt/stress/lidar"],
+  "required_topics": ["/simopt/stress/camera", "/simopt/stress/down_camera", "/simopt/stress/lidar", "/simopt/stress/imu"],
+  "message_check_topics": ["/simopt/stress/camera", "/simopt/stress/down_camera", "/simopt/stress/lidar", "/simopt/stress/imu"],
+  "load_topics": ["/simopt/stress/camera", "/simopt/stress/down_camera", "/simopt/stress/lidar"],
   "working_directory": "../..",
   "gz_command": "gz",
   "warmup_seconds": 30.0,

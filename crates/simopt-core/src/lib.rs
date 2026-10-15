@@ -54,6 +54,8 @@ pub struct ProcessMetrics {
     pub cpu_time_s: Option<f64>,
     pub average_cpu_cores: Option<f64>,
     pub peak_rss_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peak_process_count: Option<usize>,
     pub warnings: Vec<String>,
 }
 
@@ -409,6 +411,7 @@ pub fn diagnose_suite(
 
     let mut findings = Vec::new();
     let mut recommended_next_steps = Vec::new();
+    let mut warnings = suite.warnings.clone();
     match workload_state {
         WorkloadState::RealtimeCapped => {
             findings.push(
@@ -462,8 +465,18 @@ pub fn diagnose_suite(
     }
     if let Some(value) = median_average_cpu_cores {
         findings.push(format!(
-            "the measured process group used a median average of {value:.3} CPU cores"
+            "the measured process tree used a median average of {value:.3} CPU cores"
         ));
+        if value <= f64::EPSILON {
+            warnings.push(
+                "process metrics report zero CPU use; the launcher may have detached Gazebo workers outside the observed process tree"
+                    .into(),
+            );
+            recommended_next_steps.push(
+                "repeat with the process-tree collector before using CPU or RSS metrics for a GUI/headless comparison"
+                    .into(),
+            );
+        }
     }
     if software_renderer_runs > 0 {
         findings.push(format!(
@@ -494,7 +507,7 @@ pub fn diagnose_suite(
         software_renderer_runs,
         findings,
         recommended_next_steps,
-        warnings: suite.warnings.clone(),
+        warnings,
     })
 }
 
@@ -962,6 +975,7 @@ mod tests {
                 cpu_time_s: Some(4.0),
                 average_cpu_cores: Some(0.4),
                 peak_rss_bytes: Some(300_000_000),
+                peak_process_count: Some(4),
                 warnings: Vec::new(),
             });
             run.renderer = Some(RendererIdentity {
@@ -984,6 +998,38 @@ mod tests {
             .recommended_next_steps
             .iter()
             .any(|step| step.contains("heavier")));
+    }
+
+    #[test]
+    fn warns_when_suite_reports_zero_process_cpu() {
+        let mut run = analyze_samples(
+            "gui-run",
+            "run.csv",
+            &[sample(0.0, 0.0), sample(10.0, 10.0)],
+            1.0,
+        )
+        .unwrap();
+        run.process_metrics = Some(ProcessMetrics {
+            source: "linux-procfs-process-group".into(),
+            sample_count: 40,
+            wall_time_s: 10.0,
+            cpu_time_s: Some(0.0),
+            average_cpu_cores: Some(0.0),
+            peak_rss_bytes: Some(64_000_000),
+            peak_process_count: None,
+            warnings: Vec::new(),
+        });
+        let suite = aggregate_reports("gui", "scenario.json", &[run]).unwrap();
+        let diagnostic = diagnose_suite(&suite).unwrap();
+
+        assert!(diagnostic
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("zero CPU")));
+        assert!(diagnostic
+            .recommended_next_steps
+            .iter()
+            .any(|step| step.contains("process-tree collector")));
     }
 
     #[test]

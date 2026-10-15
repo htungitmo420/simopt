@@ -49,6 +49,7 @@
         "cpu_time_s": { "type": ["number", "null"], "minimum": 0 },
         "average_cpu_cores": { "type": ["number", "null"], "minimum": 0 },
         "peak_rss_bytes": { "type": ["integer", "null"], "minimum": 0 },
+        "peak_process_count": { "type": "integer", "minimum": 1 },
         "warnings": { "type": "array", "items": { "type": "string" } }
       },
       "additionalProperties": false

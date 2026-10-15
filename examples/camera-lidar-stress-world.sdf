@@ -10,97 +10,107 @@
     <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
       <render_engine>ogre2</render_engine>
     </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
     <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
     <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
 
     <gravity>0 0 -9.8</gravity>
     <scene>
-      <ambient>0.35 0.35 0.35 1</ambient>
-      <background>0.08 0.08 0.1 1</background>
-      <shadows>false</shadows>
+      <ambient>0.25 0.25 0.28 1</ambient>
+      <background>0.04 0.05 0.08 1</background>
+      <shadows>true</shadows>
     </scene>
-
     <light type="directional" name="sun">
-      <pose>0 0 12 0 0 0</pose>
-      <diffuse>0.8 0.8 0.8 1</diffuse>
-      <specular>0.2 0.2 0.2 1</specular>
-      <direction>-0.5 0.1 -0.9</direction>
+      <pose>0 0 20 0 0 0</pose>
+      <diffuse>0.9 0.85 0.8 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <direction>-0.5 0.2 -0.85</direction>
+      <cast_shadows>true</cast_shadows>
     </light>
 
     <model name="ground">
       <static>true</static>
       <link name="link">
-        <collision name="collision">
-          <geometry><box><size>60 60 0.1</size></box></geometry>
-        </collision>
-        <visual name="visual">
-          <geometry><box><size>60 60 0.1</size></box></geometry>
-          <material><diffuse>0.45 0.45 0.45 1</diffuse></material>
-        </visual>
+        <collision name="collision"><geometry><box><size>80 80 0.1</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>80 80 0.1</size></box></geometry><material><diffuse>0.32 0.34 0.36 1</diffuse></material></visual>
       </link>
     </model>
 
-    <model name="sensor_rig">
-      <static>true</static>
-      <pose>0 0 2 0 0 0</pose>
-      <link name="link">
-        <visual name="body">
-          <geometry><box><size>0.3 0.3 0.15</size></box></geometry>
-          <material><diffuse>0.1 0.2 0.8 1</diffuse></material>
-        </visual>
+    <!-- A moving rigid-body drone rig. VelocityControl keeps it flying in a
+         curved path so physics, rendering and sensors update continuously. -->
+    <model name="stress_drone">
+      <static>false</static>
+      <pose>0 0 3 0 0 0</pose>
+      <link name="base_link">
+        <gravity>false</gravity>
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz></inertia></inertial>
+        <collision name="body_collision"><geometry><box><size>0.42 0.32 0.14</size></box></geometry></collision>
+        <visual name="body_visual"><geometry><box><size>0.42 0.32 0.14</size></box></geometry><material><diffuse>0.05 0.12 0.75 1</diffuse><specular>0.6 0.6 0.6 1</specular></material></visual>
+        <visual name="arm_front"><pose>0.22 0 0 0 0 0.7854</pose><geometry><box><size>0.75 0.035 0.025</size></box></geometry></visual>
+        <visual name="arm_back"><pose>-0.22 0 0 0 0 -0.7854</pose><geometry><box><size>0.75 0.035 0.025</size></box></geometry></visual>
+        <visual name="rotor_fl"><pose>0.32 0.32 0.03 0 0 0</pose><geometry><cylinder><radius>0.18</radius><length>0.012</length></cylinder></geometry></visual>
+        <visual name="rotor_fr"><pose>0.32 -0.32 0.03 0 0 0</pose><geometry><cylinder><radius>0.18</radius><length>0.012</length></cylinder></geometry></visual>
+        <visual name="rotor_rl"><pose>-0.32 0.32 0.03 0 0 0</pose><geometry><cylinder><radius>0.18</radius><length>0.012</length></cylinder></geometry></visual>
+        <visual name="rotor_rr"><pose>-0.32 -0.32 0.03 0 0 0</pose><geometry><cylinder><radius>0.18</radius><length>0.012</length></cylinder></geometry></visual>
 
         <sensor name="front_camera" type="camera">
-          <topic>/simopt/stress/camera</topic>
-          <always_on>true</always_on>
-          <update_rate>60</update_rate>
-          <visualize>false</visualize>
-          <enable_metrics>true</enable_metrics>
-          <camera>
-            <horizontal_fov>1.047</horizontal_fov>
-            <image>
-              <width>1280</width>
-              <height>720</height>
-              <format>R8G8B8</format>
-            </image>
-            <clip><near>0.1</near><far>50</far></clip>
-          </camera>
+          <pose>0.24 0 -0.02 0 0 0</pose><topic>/simopt/stress/camera</topic>
+          <always_on>true</always_on><update_rate>60</update_rate><visualize>false</visualize><enable_metrics>true</enable_metrics>
+          <camera><horizontal_fov>1.22173</horizontal_fov><image><width>1920</width><height>1080</height><format>R8G8B8</format></image><clip><near>0.08</near><far>80</far></clip></camera>
         </sensor>
-
+        <sensor name="down_camera" type="camera">
+          <pose>0 0 -0.08 0 1.5708 0</pose><topic>/simopt/stress/down_camera</topic>
+          <always_on>true</always_on><update_rate>30</update_rate><visualize>false</visualize><enable_metrics>true</enable_metrics>
+          <camera><horizontal_fov>1.39626</horizontal_fov><image><width>1280</width><height>720</height><format>R8G8B8</format></image><clip><near>0.08</near><far>50</far></clip></camera>
+        </sensor>
         <sensor name="front_lidar" type="gpu_lidar">
-          <topic>/simopt/stress/lidar</topic>
-          <always_on>true</always_on>
-          <update_rate>20</update_rate>
-          <visualize>false</visualize>
-          <enable_metrics>true</enable_metrics>
-          <ray>
-            <scan>
-              <horizontal>
-                <samples>2048</samples>
-                <resolution>1</resolution>
-                <min_angle>-3.14159</min_angle>
-                <max_angle>3.14159</max_angle>
-              </horizontal>
-              <vertical>
-                <samples>64</samples>
-                <resolution>1</resolution>
-                <min_angle>-0.4363</min_angle>
-                <max_angle>0.4363</max_angle>
-              </vertical>
-            </scan>
-            <range><min>0.2</min><max>50</max><resolution>0.01</resolution></range>
-          </ray>
+          <pose>0.2 0 0.03 0 0 0</pose><topic>/simopt/stress/lidar</topic>
+          <always_on>true</always_on><update_rate>20</update_rate><visualize>false</visualize><enable_metrics>true</enable_metrics>
+          <ray><scan>
+            <horizontal><samples>4096</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal>
+            <vertical><samples>128</samples><resolution>1</resolution><min_angle>-0.523599</min_angle><max_angle>0.523599</max_angle></vertical>
+          </scan><range><min>0.15</min><max>80</max><resolution>0.01</resolution></range></ray>
         </sensor>
+        <sensor name="imu" type="imu"><topic>/simopt/stress/imu</topic><always_on>true</always_on><update_rate>400</update_rate></sensor>
       </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+        <initial_linear>0.6 0 0</initial_linear><initial_angular>0 0 0.3</initial_angular>
+      </plugin>
     </model>
 
+    <!-- Dense geometry around the flight path increases render, ray and
+         broad-phase collision work without external Fuel assets. -->
     <model name="obstacle_field">
       <static>true</static>
       <link name="link">
-        <visual name="box_1"><pose>5 -4 1 0 0 0</pose><geometry><box><size>1 1 2</size></box></geometry></visual>
-        <visual name="box_2"><pose>7 0 1.5 0 0 0</pose><geometry><box><size>1.5 1.5 3</size></box></geometry></visual>
-        <visual name="box_3"><pose>10 4 2 0 0 0</pose><geometry><box><size>2 2 4</size></box></geometry></visual>
-        <visual name="box_4"><pose>14 -3 2.5 0 0 0</pose><geometry><cylinder><radius>1.2</radius><length>5</length></cylinder></geometry></visual>
-        <visual name="box_5"><pose>18 3 3 0 0 0</pose><geometry><box><size>3 1 6</size></box></geometry></visual>
+        <collision name="tower_01_c"><pose>7 0 3 0 0 0</pose><geometry><box><size>1 1 6</size></box></geometry></collision>
+        <visual name="tower_01_v"><pose>7 0 3 0 0 0</pose><geometry><box><size>1 1 6</size></box></geometry><material><diffuse>0.8 0.15 0.1 1</diffuse></material></visual>
+        <collision name="tower_02_c"><pose>5 5 2.5 0 0 0.3</pose><geometry><box><size>1.5 1.5 5</size></box></geometry></collision>
+        <visual name="tower_02_v"><pose>5 5 2.5 0 0 0.3</pose><geometry><box><size>1.5 1.5 5</size></box></geometry></visual>
+        <collision name="tower_03_c"><pose>0 7 4 0 0 0</pose><geometry><cylinder><radius>0.8</radius><length>8</length></cylinder></geometry></collision>
+        <visual name="tower_03_v"><pose>0 7 4 0 0 0</pose><geometry><cylinder><radius>0.8</radius><length>8</length></cylinder></geometry></visual>
+        <collision name="tower_04_c"><pose>-5 5 3 0 0 -0.4</pose><geometry><box><size>2 1 6</size></box></geometry></collision>
+        <visual name="tower_04_v"><pose>-5 5 3 0 0 -0.4</pose><geometry><box><size>2 1 6</size></box></geometry></visual>
+        <collision name="tower_05_c"><pose>-7 0 2 0 0 0</pose><geometry><box><size>1 2 4</size></box></geometry></collision>
+        <visual name="tower_05_v"><pose>-7 0 2 0 0 0</pose><geometry><box><size>1 2 4</size></box></geometry></visual>
+        <collision name="tower_06_c"><pose>-5 -5 3.5 0 0 0.5</pose><geometry><box><size>1.5 1.5 7</size></box></geometry></collision>
+        <visual name="tower_06_v"><pose>-5 -5 3.5 0 0 0.5</pose><geometry><box><size>1.5 1.5 7</size></box></geometry></visual>
+        <collision name="tower_07_c"><pose>0 -7 2.5 0 0 0</pose><geometry><cylinder><radius>1</radius><length>5</length></cylinder></geometry></collision>
+        <visual name="tower_07_v"><pose>0 -7 2.5 0 0 0</pose><geometry><cylinder><radius>1</radius><length>5</length></cylinder></geometry></visual>
+        <collision name="tower_08_c"><pose>5 -5 4.5 0 0 -0.3</pose><geometry><box><size>2 1 9</size></box></geometry></collision>
+        <visual name="tower_08_v"><pose>5 -5 4.5 0 0 -0.3</pose><geometry><box><size>2 1 9</size></box></geometry></visual>
+        <collision name="inner_01_c"><pose>4 0 1.5 0 0 0</pose><geometry><box><size>0.7 0.7 3</size></box></geometry></collision>
+        <visual name="inner_01_v"><pose>4 0 1.5 0 0 0</pose><geometry><box><size>0.7 0.7 3</size></box></geometry></visual>
+        <collision name="inner_02_c"><pose>0 5 2 0 0 0</pose><geometry><box><size>0.8 0.8 4</size></box></geometry></collision>
+        <visual name="inner_02_v"><pose>0 5 2 0 0 0</pose><geometry><box><size>0.8 0.8 4</size></box></geometry></visual>
+        <collision name="inner_03_c"><pose>-4 0 2.5 0 0 0</pose><geometry><box><size>0.9 0.9 5</size></box></geometry></collision>
+        <visual name="inner_03_v"><pose>-4 0 2.5 0 0 0</pose><geometry><box><size>0.9 0.9 5</size></box></geometry></visual>
+        <collision name="inner_04_c"><pose>0 -4 1.75 0 0 0</pose><geometry><box><size>0.8 0.8 3.5</size></box></geometry></collision>
+        <visual name="inner_04_v"><pose>0 -4 1.75 0 0 0</pose><geometry><box><size>0.8 0.8 3.5</size></box></geometry></visual>
+        <visual name="wall_n"><pose>0 12 3 0 0 0</pose><geometry><box><size>24 0.25 6</size></box></geometry></visual>
+        <visual name="wall_s"><pose>0 -12 3 0 0 0</pose><geometry><box><size>24 0.25 6</size></box></geometry></visual>
+        <visual name="wall_e"><pose>12 0 3 0 0 0</pose><geometry><box><size>0.25 24 6</size></box></geometry></visual>
+        <visual name="wall_w"><pose>-12 0 3 0 0 0</pose><geometry><box><size>0.25 24 6</size></box></geometry></visual>
       </link>
     </model>
   </world>

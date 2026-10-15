@@ -31,6 +31,12 @@
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
     },
+    "load_topics": {
+      "description": "Gazebo topics kept subscribed throughout warm-up and measurement to activate lazy sensors.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
     "working_directory": { "type": ["string", "null"] },
     "gz_command": { "type": "string", "minLength": 1 },
     "warmup_seconds": { "type": "number", "minimum": 0 },
