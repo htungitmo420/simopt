@@ -6,8 +6,8 @@ mod resources;
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
 use simopt_core::{
-    analyze_samples, compare_reports, compare_suites, diagnose_suite, BenchmarkReport,
-    BenchmarkSuiteReport, TimeSample,
+    analyze_samples, compare_reports, compare_suites, diagnose_suite, summarize_suite_matrix,
+    BenchmarkReport, BenchmarkSuiteReport, TimeSample,
 };
 use std::{
     fs::File,
@@ -95,6 +95,14 @@ enum Command {
         output: Option<PathBuf>,
         #[arg(long, default_value_t = 10.0)]
         minimum_gain_percent: f64,
+    },
+    /// Summarize an ordered B2-B7 or sensor cost-isolation suite matrix.
+    SuiteMatrix {
+        /// Suite JSON files in matrix order; the first input is the baseline.
+        #[arg(long = "input", required = true)]
+        inputs: Vec<PathBuf>,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
     /// Launch and repeat a complete Gazebo benchmark from a JSON scenario.
     Bench {
@@ -188,6 +196,14 @@ fn run(cli: Cli) -> Result<(), String> {
                 compare_suites(&baseline_suite, &candidate_suite, minimum_gain_percent)
                     .map_err(|error| error.to_string())?;
             write_json(output.as_deref(), &comparison)
+        }
+        Command::SuiteMatrix { inputs, output } => {
+            let suites = inputs
+                .iter()
+                .map(|path| read_json::<BenchmarkSuiteReport>(path))
+                .collect::<Result<Vec<_>, _>>()?;
+            let matrix = summarize_suite_matrix(&suites).map_err(|error| error.to_string())?;
+            write_json(output.as_deref(), &matrix)
         }
         Command::Bench {
             scenario,

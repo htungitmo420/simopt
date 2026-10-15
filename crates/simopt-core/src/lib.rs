@@ -138,6 +138,33 @@ pub struct SuiteComparisonReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SuiteMatrixCase {
+    pub label: String,
+    pub scenario: String,
+    pub run_count: usize,
+    pub median_rtf: f64,
+    pub p05_rtf: f64,
+    pub wall_seconds_per_sim_second: Option<f64>,
+    pub relative_rtf_change_from_baseline_percent: Option<f64>,
+    pub additional_wall_seconds_per_sim_second: Option<f64>,
+    pub median_average_cpu_cores: Option<f64>,
+    pub maximum_peak_rss_bytes: Option<u64>,
+    pub renderers: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SuiteMatrixReport {
+    pub schema_version: u32,
+    pub baseline_label: String,
+    pub cases: Vec<SuiteMatrixCase>,
+    pub workload_fingerprint_match: Option<bool>,
+    pub measurement_policy_match: bool,
+    pub renderer_match: Option<bool>,
+    pub comparable: bool,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BenchmarkSuiteReport {
     pub schema_version: u32,
     pub label: String,
@@ -199,6 +226,8 @@ pub enum AnalysisError {
     UnsupportedSuiteSchema { version: u32 },
     #[error("suite declares {declared} run(s) but contains {actual}")]
     InvalidSuiteRunCount { declared: usize, actual: usize },
+    #[error("at least two benchmark suites are required")]
+    NotEnoughSuites,
 }
 
 /// Analyze monotonic wall/simulation timestamps.
@@ -634,6 +663,141 @@ pub fn compare_suites(
     })
 }
 
+/// Summarize an ordered cost-isolation matrix. The first suite is the baseline.
+pub fn summarize_suite_matrix(
+    suites: &[BenchmarkSuiteReport],
+) -> Result<SuiteMatrixReport, AnalysisError> {
+    if suites.len() < 2 {
+        return Err(AnalysisError::NotEnoughSuites);
+    }
+    for suite in suites {
+        validate_suite(suite)?;
+    }
+
+    let baseline = &suites[0];
+    let baseline_rtf = baseline.total_rtf.median;
+    let baseline_wall_per_sim = (baseline_rtf > 0.0).then(|| 1.0 / baseline_rtf);
+    let baseline_workload = baseline.fingerprint.as_ref().map(workload_digests);
+    let workload_fingerprint_match = baseline_workload.as_ref().map(|expected| {
+        suites.iter().all(|suite| {
+            suite
+                .fingerprint
+                .as_ref()
+                .is_some_and(|fingerprint| workload_digests(fingerprint) == *expected)
+        })
+    });
+
+    let baseline_window = baseline.runs.first().map(|run| run.window_seconds);
+    let mut baseline_durations = baseline
+        .runs
+        .iter()
+        .map(|run| run.total_wall_time_s)
+        .collect::<Vec<_>>();
+    let baseline_duration = median_value(&mut baseline_durations).unwrap_or_default();
+    let measurement_policy_match = baseline_duration > 0.0
+        && suites.iter().all(|suite| {
+            let mut durations = suite
+                .runs
+                .iter()
+                .map(|run| run.total_wall_time_s)
+                .collect::<Vec<_>>();
+            let duration = median_value(&mut durations).unwrap_or_default();
+            suite.runs.first().map(|run| run.window_seconds) == baseline_window
+                && ((duration - baseline_duration).abs() / baseline_duration) <= 0.05
+        });
+
+    let renderer_sets = suites.iter().map(suite_renderer_names).collect::<Vec<_>>();
+    let renderer_match = (!renderer_sets.iter().any(Vec::is_empty))
+        .then(|| renderer_sets.iter().all(|value| value == &renderer_sets[0]));
+
+    let cases = suites
+        .iter()
+        .map(|suite| {
+            let rtf = suite.total_rtf.median;
+            let wall_per_sim = (rtf > 0.0).then(|| 1.0 / rtf);
+            let mut cpu_cores = suite
+                .runs
+                .iter()
+                .filter_map(|run| run.process_metrics.as_ref()?.average_cpu_cores)
+                .collect::<Vec<_>>();
+            SuiteMatrixCase {
+                label: suite.label.clone(),
+                scenario: suite.scenario.clone(),
+                run_count: suite.run_count,
+                median_rtf: rtf,
+                p05_rtf: suite.total_rtf.p05,
+                wall_seconds_per_sim_second: wall_per_sim,
+                relative_rtf_change_from_baseline_percent: (baseline_rtf > 0.0)
+                    .then(|| (rtf - baseline_rtf) / baseline_rtf * 100.0),
+                additional_wall_seconds_per_sim_second: wall_per_sim
+                    .zip(baseline_wall_per_sim)
+                    .map(|(value, baseline_value)| value - baseline_value),
+                median_average_cpu_cores: median_value(&mut cpu_cores),
+                maximum_peak_rss_bytes: suite
+                    .runs
+                    .iter()
+                    .filter_map(|run| run.process_metrics.as_ref()?.peak_rss_bytes)
+                    .max(),
+                renderers: suite_renderer_names(suite),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let mut comparable = true;
+    let mut warnings = Vec::new();
+    match workload_fingerprint_match {
+        Some(true) => {}
+        Some(false) => {
+            comparable = false;
+            warnings.push("workload file fingerprints differ across matrix cases".into());
+        }
+        None => {
+            comparable = false;
+            warnings.push("one or more workload fingerprints are unavailable".into());
+        }
+    }
+    if !measurement_policy_match {
+        comparable = false;
+        warnings.push(
+            "RTF window duration or measured wall duration differs by more than 5% across matrix cases"
+                .into(),
+        );
+    }
+    match renderer_match {
+        Some(true) => {}
+        Some(false) => {
+            comparable = false;
+            warnings.push("Gazebo renderer identities differ across matrix cases".into());
+        }
+        None => warnings.push(
+            "renderer identity is unavailable for one or more cases; review those cases manually"
+                .into(),
+        ),
+    }
+    for case in &cases {
+        if case.run_count < 3 {
+            warnings.push(format!("{} has fewer than three repetitions", case.label));
+        }
+        if (0.97..=1.03).contains(&case.median_rtf) && case.p05_rtf >= 0.95 {
+            warnings.push(format!(
+                "{} is near the real-time cap; its isolated cost may be hidden",
+                case.label
+            ));
+        }
+    }
+
+    Ok(SuiteMatrixReport {
+        schema_version: REPORT_SCHEMA_VERSION,
+        baseline_label: baseline.label.clone(),
+        cases,
+        workload_fingerprint_match,
+        measurement_policy_match,
+        renderer_match,
+        comparable,
+        warnings,
+    })
+}
+
 fn validate_suite(suite: &BenchmarkSuiteReport) -> Result<(), AnalysisError> {
     if suite.schema_version != REPORT_SCHEMA_VERSION {
         return Err(AnalysisError::UnsupportedSuiteSchema {
@@ -1063,5 +1227,65 @@ mod tests {
         assert!(comparison.measurement_policy_match);
         assert!(!comparison.comparable);
         assert!(!comparison.performance_gate_passed);
+    }
+
+    #[test]
+    fn summarizes_an_ordered_suite_matrix() {
+        let make_suite = |label: &str, sim_time: f64| {
+            let mut runs = Vec::new();
+            for index in 0..3 {
+                let mut run = analyze_samples(
+                    format!("{label}-{index}"),
+                    "run.csv",
+                    &[sample(0.0, 0.0), sample(10.0, sim_time)],
+                    1.0,
+                )
+                .unwrap();
+                run.renderer = Some(RendererIdentity {
+                    source: "ogre2.log".into(),
+                    egl_device: None,
+                    gl_renderer: Some("D3D12 (NVIDIA)".into()),
+                    device_name: None,
+                    software: false,
+                    log_modified_unix_ms: None,
+                });
+                runs.push(run);
+            }
+            let mut suite = aggregate_reports(label, format!("{label}.json"), &runs).unwrap();
+            suite.fingerprint = Some(BenchmarkFingerprint {
+                algorithm: "sha256".into(),
+                scenario: ArtifactFingerprint {
+                    path: format!("{label}.json"),
+                    size_bytes: 1,
+                    digest: label.into(),
+                },
+                workload_files: vec![ArtifactFingerprint {
+                    path: "world.sdf".into(),
+                    size_bytes: 1,
+                    digest: "same-world".into(),
+                }],
+                capability_report: None,
+                tool_version: Some("0.1.0".into()),
+                source_revision: None,
+            });
+            suite
+        };
+        let baseline = make_suite("physics", 10.0);
+        let camera = make_suite("camera", 5.0);
+
+        let matrix = summarize_suite_matrix(&[baseline, camera]).unwrap();
+
+        assert!(matrix.comparable);
+        assert_eq!(matrix.workload_fingerprint_match, Some(true));
+        assert_eq!(matrix.renderer_match, Some(true));
+        assert!((matrix.cases[1].median_rtf - 0.5).abs() < 1e-12);
+        assert_eq!(
+            matrix.cases[1].relative_rtf_change_from_baseline_percent,
+            Some(-50.0)
+        );
+        assert_eq!(
+            matrix.cases[1].additional_wall_seconds_per_sim_second,
+            Some(1.0)
+        );
     }
 }

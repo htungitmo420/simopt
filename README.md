@@ -161,6 +161,33 @@ Gazebo process-tree CPU/RSS metrics, while their effect on simulator RTF is
 retained. Because the CLI subscribers still deserialize sensor messages, keep
 the exact same topic list when comparing two configurations.
 
+After establishing GUI versus headless behavior, run the headless sensor
+isolation matrix. It measures physics/IMU, front camera, dual cameras, GPU
+LiDAR, and the complete sensor set against the same world fingerprint and
+measurement policy:
+
+```bash
+bash scripts/run-sensor-matrix.sh reports/sensor-isolation
+```
+
+The resulting `reports/sensor-isolation/matrix.json` reports median and p05 RTF,
+wall seconds per simulated second, incremental wall cost relative to B2,
+process CPU/RSS, renderer consistency, and comparability warnings. Individual
+commands can also be summarized in a chosen order:
+
+```bash
+./target/release/simopt suite-matrix \
+  --input reports/b2/suite.json \
+  --input reports/b3-camera/suite.json \
+  --input reports/b4-lidar/suite.json \
+  --input reports/b5-full/suite.json \
+  --output reports/sensor-matrix.json
+```
+
+Treat adjacent-case differences as bottleneck indicators because rendering,
+transport, and sensor scheduling can overlap. A case pinned at RTF 1.0 only
+provides an upper bound on its cost.
+
 On a Jazzy installation, run the included end-to-end smoke test from WSL2 or
 Ubuntu after building the release binary:
 

@@ -34,6 +34,10 @@ Updated: 2026-10-15
 - Suite diagnosis classifies real-time-capped, below-real-time, faster-than-real-time,
   unstable, and inconclusive workloads. Repeated-suite comparison checks workload
   fingerprints and renderer identity before evaluating its performance gate.
+- `simopt suite-matrix` summarizes an ordered B2-B7 or sensor-isolation run,
+  including wall cost per simulated second and provenance consistency checks.
+- Repository scenarios and a runner script now isolate physics/IMU, the front
+  camera, both cameras, GPU LiDAR, and the complete sensor set headlessly.
 - A moving-drone reference world and paired GUI/headless scenarios exercise two
   cameras, a high-density GPU LiDAR, IMU, shadows, physics, and obstacle geometry.
   Persistent load-topic subscribers keep lazy rendering active during measurement.
@@ -112,6 +116,14 @@ group. These results remain renderer/runtime evidence but cannot establish a
 GUI-versus-headless speedup. The runner now keeps declared `load_topics`
 subscribed and follows descendant processes across process groups.
 
+The upgraded loaded-drone suite from the auxiliary i7-4790 / GTX 1080 Ti is no
+longer capped. Three headless runs measured median RTF 0.2796 and p05 0.2794;
+three GUI runs measured median RTF 0.2278 and p05 0.2204. Workload, renderer,
+and measurement policy match, so headless improves median RTF by 22.73%.
+Headless used about 1.07 measured Gazebo CPU cores and 396 MiB peak RSS, versus
+1.93 cores and 884 MiB for the GUI process tree. Both used the D3D12 GTX 1080 Ti
+renderer. Sensor cost still needs B2-B5 isolation before changing fidelity.
+
 The upgraded drone stress smoke run completed locally with all camera, LiDAR,
 and IMU streams active. On the development WSL2 software renderer it measured
 RTF 0.1560, 7.19 average CPU cores, and about 779 MiB peak RSS. This proves the
@@ -124,13 +136,13 @@ comparison because each smoke profile contains only one short repetition.
 
 ## Next implementation slice
 
-1. Run the upgraded loaded-drone stress GUI/headless pair on the auxiliary
-   machine, then repeat B0/B1 on the actual drone world.
-2. Record the real drone launch, sensor specifications, physics step, bridge,
+1. Run the new headless B2-B5 sensor-isolation matrix on the auxiliary machine.
+2. Repeat B0/B1 and the dominant B2-B5 cases on the actual drone world.
+3. Record the real drone launch, sensor specifications, physics step, bridge,
    perception, controller, and SITL configuration for B2-B7.
-3. Add quality-adapter hooks for obstacle-avoidance latency and accuracy gates.
-4. Add native Gazebo Transport collection after the CLI contract stabilizes.
-5. Only after profiling, select a compute kernel for a C++/Rust FFI spike.
+4. Add quality-adapter hooks for obstacle-avoidance latency and accuracy gates.
+5. Add native Gazebo Transport collection after the CLI contract stabilizes.
+6. Only after profiling, select a compute kernel for a C++/Rust FFI spike.
 
 ## Verification
 

@@ -247,6 +247,8 @@ schemas/                   # versioned JSON contracts
 - [x] Add a repository-owned camera/GPU-LiDAR world with per-run renderer identity and pre-measurement sensor-message readiness checks.
 - [x] Keep declared sensor topics subscribed during measurement so lazy camera and GPU LiDAR work is actually included.
 - [x] Add a synthetic moving-drone stress world with two cameras, dense GPU LiDAR, IMU, shadows, collisions, and local obstacle assets.
+- [x] Confirm on the i7-4790 / GTX 1080 Ti that headless rendering improves the loaded-drone median RTF by 22.73% over GUI.
+- [x] Add reusable B2-B5 sensor-isolation scenarios and an ordered suite-matrix analyzer.
 - [ ] Complete the B0–B7 matrix with the real camera/LiDAR drone workload.
 - [ ] Optimize Gazebo/ROS/C++ with evidence and retain rollback data.
 - [ ] Select one Rust kernel only when profiling establishes value.

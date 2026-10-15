@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/simopt/suite-matrix-report.schema.json",
+  "title": "simopt ordered suite matrix report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "baseline_label",
+    "cases",
+    "workload_fingerprint_match",
+    "measurement_policy_match",
+    "renderer_match",
+    "comparable",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "baseline_label": { "type": "string" },
+    "cases": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "label",
+          "scenario",
+          "run_count",
+          "median_rtf",
+          "p05_rtf",
+          "wall_seconds_per_sim_second",
+          "relative_rtf_change_from_baseline_percent",
+          "additional_wall_seconds_per_sim_second",
+          "median_average_cpu_cores",
+          "maximum_peak_rss_bytes",
+          "renderers"
+        ],
+        "properties": {
+          "label": { "type": "string" },
+          "scenario": { "type": "string" },
+          "run_count": { "type": "integer", "minimum": 1 },
+          "median_rtf": { "type": "number", "minimum": 0 },
+          "p05_rtf": { "type": "number", "minimum": 0 },
+          "wall_seconds_per_sim_second": { "type": ["number", "null"], "minimum": 0 },
+          "relative_rtf_change_from_baseline_percent": { "type": ["number", "null"] },
+          "additional_wall_seconds_per_sim_second": { "type": ["number", "null"] },
+          "median_average_cpu_cores": { "type": ["number", "null"], "minimum": 0 },
+          "maximum_peak_rss_bytes": { "type": ["integer", "null"], "minimum": 0 },
+          "renderers": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+        },
+        "additionalProperties": false
+      }
+    },
+    "workload_fingerprint_match": { "type": ["boolean", "null"] },
+    "measurement_policy_match": { "type": "boolean" },
+    "renderer_match": { "type": ["boolean", "null"] },
+    "comparable": { "type": "boolean" },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}
